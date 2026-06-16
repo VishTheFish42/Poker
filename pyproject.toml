@@ -2,15 +2,99 @@
 name = "poker"
 version = "0.1.0"
 description = "Desktop Texas Hold'em poker game with PyQt UI and RL-based AI opponents."
-authors = ["VishTheFish42 <>"]
 readme = "README.md"
 license = { text = "MIT" }
+authors = [
+    { name = "Vishwa", email = "vishwa@example.com" }
+]
 requires-python = ">=3.11"
+keywords = ["poker", "texas-hold-em", "game", "ai", "reinforcement-learning", "pyside6"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Games/Entertainment :: Fortune Telling",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+]
 dependencies = [
     "PySide6>=6.6",
-    "torch",
-    "numpy"
+    "torch>=2.0",
+    "numpy>=2.0"
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "flake8>=6.0",
+    "mypy>=1.0",
+    "sphinx>=5.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/VishTheFish42/Poker"
+Repository = "https://github.com/VishTheFish42/Poker.git"
+Issues = "https://github.com/VishTheFish42/Poker/issues"
+Documentation = "https://github.com/VishTheFish42/Poker/wiki"
+
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-v --cov=src/poker --cov-report=html --cov-report=term-missing"
 
 [tool.coverage.run]
 source = ["src/poker"]
+omit = [
+    "*/tests/*",
+    "*/__main__.py",
+    "*/site-packages/*"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
