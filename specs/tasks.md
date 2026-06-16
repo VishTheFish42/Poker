@@ -1,8 +1,8 @@
 # Project Tasks and Phases
 
 ## Phase 1: Project Setup and Architecture
-1.1 Create the project repository structure.
-1.2 Choose and install the Python GUI toolkit and ML library.
+1.1 [x] Create the project repository structure.
+1.2 [x] Choose and install the Python GUI toolkit and ML library.
 1.3 Define the main module layout.
 1.4 Draft the architecture for game engine, UI, and AI.
 1.5 Create a development environment and dependency manifest.
@@ -63,7 +63,7 @@
 5. Polished desktop experience with settings and restart flow.
 
 ## Task Breakdown
-1. Task 1: Setup repo, dependencies, and environment.
+1. [x] Task 1: Setup repo, dependencies, and environment.
 2. Task 2: Implement `Card`, `Deck`, `HandEvaluator`, `Player`, `Table`, `GameEngine`.
 3. Task 3: Build `GameController` and betting round logic.
 4. Task 4: Design the launch lobby and settings interface.
