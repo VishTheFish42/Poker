@@ -10,7 +10,7 @@
 ## Phase 2: Core Poker Engine
 2.1 [x] Implement card and deck abstractions.
 2.2 [x] Build a hand evaluator for Texas Hold'em rankings.
-2.3 Design player and seat models.
+2.3 [x] Design player and seat models.
 2.4 Implement game state management and betting rounds.
 2.5 Add blind posting and dealer button rotation.
 2.6 Implement pot pooling and side pot management.
