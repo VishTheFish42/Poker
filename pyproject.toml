@@ -1,0 +1,16 @@
+[project]
+name = "poker"
+version = "0.1.0"
+description = "Desktop Texas Hold'em poker game with PyQt UI and RL-based AI opponents."
+authors = ["VishTheFish42 <>"]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "PySide6>=6.6",
+    "torch",
+    "numpy"
+]
+
+[tool.coverage.run]
+source = ["src/poker"]
