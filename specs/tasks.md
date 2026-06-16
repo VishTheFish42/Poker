@@ -4,7 +4,7 @@
 1.1 [x] Create the project repository structure.
 1.2 [x] Choose and install the Python GUI toolkit and ML library.
 1.3 [x] Define the main module layout.
-1.4 Draft the architecture for game engine, UI, and AI.
+1.4 [x] Draft the architecture for game engine, UI, and AI.
 1.5 Create a development environment and dependency manifest.
 
 ## Phase 2: Core Poker Engine
