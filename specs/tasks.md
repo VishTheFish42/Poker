@@ -12,9 +12,9 @@
 2.2 [x] Build a hand evaluator for Texas Hold'em rankings.
 2.3 [x] Design player and seat models.
 2.4 [x] Implement game state management and betting rounds.
-2.5 Add blind posting and dealer button rotation.
-2.6 Implement pot pooling and side pot management.
-2.7 Add hand showdown resolution and tie-breaking.
+2.5 [x] Add blind posting and dealer button rotation.
+2.6 [x] Implement pot pooling and side pot management.
+2.7 [x] Add hand showdown resolution and tie-breaking.
 
 ## Phase 3: Interactive Game Flow
 3.1 Build the game controller to manage round progression.

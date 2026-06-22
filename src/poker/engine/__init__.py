@@ -6,6 +6,8 @@ from .player import Player, HumanPlayer, AIPlayer, Seat, PlayerStatus, Difficult
 from .action import Action, ActionType
 from .table import Table, GameState
 from .betting import BettingRound
+from .pot_manager import Pot, PotManager
+from .showdown import PlayerResult, ShowdownResult, Showdown
 
 __all__ = [
     "Card",
@@ -26,4 +28,9 @@ __all__ = [
     "Table",
     "GameState",
     "BettingRound",
+    "Pot",
+    "PotManager",
+    "PlayerResult",
+    "ShowdownResult",
+    "Showdown",
 ]
