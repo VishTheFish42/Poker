@@ -128,6 +128,25 @@ class TestTable:
         assert table.seats[1].is_small_blind
         assert table.seats[2].is_big_blind
 
+    def test_rotate_button(self):
+        """Test rotating the button and blind positions for the next hand."""
+        table = Table(6)
+        players = [
+            Player("Alice", i, 1000) for i in range(6)
+        ]
+        for player in players:
+            table.add_player(player)
+
+        table.set_blinds(0, 1, 2)
+        table.rotate_button()
+
+        assert table.button_seat == 1
+        assert table.small_blind_seat == 2
+        assert table.big_blind_seat == 3
+        assert table.seats[1].is_button
+        assert table.seats[2].is_small_blind
+        assert table.seats[3].is_big_blind
+
     def test_advance_street(self):
         """Test advancing through streets."""
         table = Table(6)

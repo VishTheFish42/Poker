@@ -183,6 +183,15 @@ class Table:
         self.big_blind_seat = big_blind_seat
         self.seats[big_blind_seat].is_big_blind = True
 
+    def rotate_button(self) -> None:
+        """Advance the dealer button and recompute blind positions."""
+        if self.button_seat is None:
+            self.set_blinds(0, 1, 2)
+            return
+
+        next_button = (self.button_seat + 1) % self.num_seats
+        self.set_blinds(next_button, 1, 2)
+
     def deal_hole_cards(self) -> None:
         """Deal hole cards to all players in the hand."""
         for player in self.get_players_in_hand():
