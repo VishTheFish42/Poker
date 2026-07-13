@@ -35,6 +35,17 @@ class BettingRound:
         self.highest_bet = 0  # Highest bet/raise amount this round
         self.players_acted: int = 0
         self.min_raise_amount = big_blind_amount  # Minimum raise amount
+        # Seats that have acted since the last bet/raise reopened the action.
+        # A round is only complete once every player still able to act is in
+        # this set *and* has matched the highest bet.
+        self.acted_seats: set = set()
+        # Seats that may only call or fold right now, not raise again. This
+        # is populated when an all-in raises the bet by less than a full
+        # raise increment ("incomplete raise"): players who already acted at
+        # the previous level must still respond to the extra amount, but an
+        # incomplete raise does not reopen their right to re-raise - only a
+        # full raise does. Cleared whenever a full bet/raise occurs.
+        self.capped_seats: set = set()
 
     def __repr__(self) -> str:
         """Return a string representation of the betting round."""
@@ -51,6 +62,8 @@ class BettingRound:
                 self.player_bet_amounts[self.table.small_blind_seat] = actual
                 self.table.add_to_pot(actual)
                 self.highest_bet = actual
+                if sb_player.stack == 0:
+                    sb_player.go_all_in()
 
         # Post big blind
         if self.table.big_blind_seat is not None:
@@ -62,6 +75,8 @@ class BettingRound:
                 self.table.add_to_pot(actual)
                 self.highest_bet = max(self.highest_bet, actual)
                 self.min_raise_amount = actual
+                if bb_player.stack == 0:
+                    bb_player.go_all_in()
 
     def get_amount_to_call(self, seat_number: int) -> int:
         """Get the amount a player needs to call to stay in the hand.
@@ -122,7 +137,17 @@ class BettingRound:
                 )
             if action.amount > player.stack:
                 raise ValueError(f"Cannot bet ${action.amount} with stack of ${player.stack}")
+            if action.amount < self.min_raise_amount:
+                raise ValueError(
+                    f"Bet of ${action.amount} is less than the minimum bet of "
+                    f"${self.min_raise_amount} (go all-in to bet less)"
+                )
         elif action.action_type == ActionType.RAISE:
+            if action.player_seat in self.capped_seats:
+                raise ValueError(
+                    "Cannot raise: facing an incomplete all-in raise, "
+                    "may only call or fold"
+                )
             total_call_and_raise = amount_to_call + action.amount
             if total_call_and_raise > player.stack:
                 raise ValueError(
@@ -139,26 +164,35 @@ class BettingRound:
         self.actions.append(action)
         self.players_acted += 1
         self.table.set_current_player(action.player_seat)
+        self.current_bettor_seat = action.player_seat
 
         if action.action_type == ActionType.FOLD:
             player.fold()
+            self.acted_seats.add(action.player_seat)
         elif action.action_type == ActionType.CHECK:
             # No chips added
-            pass
+            self.acted_seats.add(action.player_seat)
         elif action.action_type == ActionType.CALL:
             chips_added = player.remove_chips(amount_to_call)
             self.player_bet_amounts[action.player_seat] = (
                 self.player_bet_amounts.get(action.player_seat, 0) + chips_added
             )
             self.table.add_to_pot(chips_added)
+            self.acted_seats.add(action.player_seat)
         elif action.action_type == ActionType.BET:
             chips_added = player.remove_chips(action.amount)
             self.player_bet_amounts[action.player_seat] = (
                 self.player_bet_amounts.get(action.player_seat, 0) + chips_added
             )
             self.table.add_to_pot(chips_added)
-            self.highest_bet = max(self.highest_bet, chips_added)
+            # BET is only legal when amount_to_call is 0, so this player's
+            # existing bet_amount already equals the old highest_bet (e.g.
+            # the big blind's option to raise over its own posted blind).
+            self.highest_bet += chips_added
             self.min_raise_amount = chips_added
+            # A new (full) bet reopens the action for everyone, with no cap.
+            self.acted_seats = {action.player_seat}
+            self.capped_seats = set()
         elif action.action_type == ActionType.RAISE:
             call_amount = player.remove_chips(amount_to_call)
             raise_amount = player.remove_chips(action.amount)
@@ -169,15 +203,37 @@ class BettingRound:
             self.table.add_to_pot(total_added)
             self.highest_bet += action.amount
             self.min_raise_amount = action.amount
+            # A full raise reopens the action for everyone, with no cap.
+            self.acted_seats = {action.player_seat}
+            self.capped_seats = set()
         elif action.action_type == ActionType.ALL_IN:
             chips_added = player.remove_chips(player.stack)
-            self.player_bet_amounts[action.player_seat] = (
-                self.player_bet_amounts.get(action.player_seat, 0) + chips_added
-            )
+            new_total = self.player_bet_amounts.get(action.player_seat, 0) + chips_added
+            self.player_bet_amounts[action.player_seat] = new_total
             self.table.add_to_pot(chips_added)
             player.go_all_in()
-            if chips_added > 0:
-                self.highest_bet = max(self.highest_bet, chips_added)
+            if new_total > self.highest_bet:
+                raise_size = new_total - self.highest_bet
+                is_full_raise = raise_size >= self.min_raise_amount
+                if is_full_raise:
+                    self.min_raise_amount = raise_size
+                    # A full raise reopens the action for everyone, with no cap.
+                    self.capped_seats = set()
+                else:
+                    # Incomplete raise: everyone who already matched the old
+                    # bet must still respond to the extra amount, but may
+                    # only call or fold - this all-in was too small to
+                    # reopen their right to re-raise.
+                    self.capped_seats |= self.acted_seats - {action.player_seat}
+                self.highest_bet = new_total
+                self.acted_seats = {action.player_seat}
+            else:
+                self.acted_seats.add(action.player_seat)
+
+        # Any action that exhausts a player's stack makes them all-in,
+        # regardless of which action type was used to get there.
+        if action.action_type != ActionType.FOLD and player.stack == 0:
+            player.go_all_in()
 
         return True
 
@@ -191,6 +247,14 @@ class BettingRound:
             self.round_complete = True
             return None
 
+        # Check completion first: with 2+ active players, cycling through
+        # get_next_active_player alone never terminates on its own, since it
+        # only skips folded/all-in/sitting-out seats, not seats that have
+        # already matched the current bet.
+        if self.current_bettor_seat is not None and self._is_round_complete():
+            self.round_complete = True
+            return None
+
         if self.current_bettor_seat is None:
             # Start of round
             next_seat = self.start_seat
@@ -198,13 +262,8 @@ class BettingRound:
             # Get next player after current bettor
             next_seat = self.table.get_next_active_player(self.current_bettor_seat)
             if next_seat is None:
-                # Check if round is complete
-                if self._is_round_complete():
-                    self.round_complete = True
-                    return None
-                else:
-                    # Wrap around to start
-                    next_seat = self.start_seat
+                self.round_complete = True
+                return None
 
         # Find next player who can act
         for i in range(self.table.num_seats):
@@ -220,20 +279,21 @@ class BettingRound:
         """Check if the betting round is complete.
 
         Returns:
-            True if all active players have either called the highest bet or folded
+            True if every active player has both acted since the last bet/raise
+            and matched the highest bet (or is all-in).
         """
         active_players = self.table.get_active_players()
 
         if len(active_players) <= 1:
             return True
 
-        # All active players must have either:
-        # 1. Called the highest bet, OR
-        # 2. Be all-in with less than the highest bet
         for player in active_players:
+            if player.status == PlayerStatus.ALL_IN:
+                continue
+            if player.seat not in self.acted_seats:
+                return False
             bet_amount = self.player_bet_amounts.get(player.seat, 0)
-            # Check if player has called (bet amount equals highest) or is all-in
-            if bet_amount < self.highest_bet and player.status != PlayerStatus.ALL_IN:
+            if bet_amount < self.highest_bet:
                 return False
 
         return True

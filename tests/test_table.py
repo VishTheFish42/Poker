@@ -128,6 +128,70 @@ class TestTable:
         assert table.seats[1].is_small_blind
         assert table.seats[2].is_big_blind
 
+    def test_set_blinds_heads_up_button_posts_small_blind(self):
+        """Heads-up is a special case: the button posts the SMALL blind and
+        the other player posts the big blind (standard heads-up poker rule),
+        unlike 3+ handed play where the button posts neither.
+        """
+        table = Table(2)
+        table.add_player(Player("Alice", 0, 1000))
+        table.add_player(Player("Bob", 1, 1000))
+
+        table.set_blinds(0, 1, 2)
+
+        assert table.button_seat == 0
+        assert table.small_blind_seat == 0
+        assert table.big_blind_seat == 1
+        assert table.seats[0].is_button
+        assert table.seats[0].is_small_blind
+        assert table.seats[1].is_big_blind
+
+    def test_set_blinds_heads_up_other_button_seat(self):
+        table = Table(2)
+        table.add_player(Player("Alice", 0, 1000))
+        table.add_player(Player("Bob", 1, 1000))
+
+        table.set_blinds(1, 1, 2)
+
+        assert table.small_blind_seat == 1  # button
+        assert table.big_blind_seat == 0
+
+    def test_rotate_button_skips_busted_player(self):
+        """A player sitting out (busted) must not receive the button or a
+        blind - rotation should skip straight to the next active seat.
+        """
+        table = Table(4)
+        players = [Player("P" + str(i), i, 1000) for i in range(4)]
+        for p in players:
+            table.add_player(p)
+        table.set_blinds(0, 1, 2)
+
+        players[1].status = PlayerStatus.SITTING_OUT
+        table.rotate_button()
+
+        assert table.button_seat == 2
+        assert table.small_blind_seat == 3
+        assert table.big_blind_seat == 0
+
+    def test_set_blinds_skips_gaps_in_sparse_seating(self):
+        """With fewer players than seats, blind seats must land on real
+        active players, not on raw button+1/button+2 arithmetic that may
+        point at an empty seat.
+        """
+        table = Table(6)
+        table.add_player(Player("Alice", 1, 1000))
+        table.add_player(Player("Bob", 4, 1000))
+        table.rotate_button()  # first hand: lands on the first active seat (1)
+
+        assert table.button_seat == 1
+        assert table.small_blind_seat == 1  # heads-up: button posts SB
+        assert table.big_blind_seat == 4
+
+        table.rotate_button()  # second hand: advances to the other active seat
+        assert table.button_seat == 4
+        assert table.small_blind_seat == 4
+        assert table.big_blind_seat == 1
+
     def test_rotate_button(self):
         """Test rotating the button and blind positions for the next hand."""
         table = Table(6)
@@ -146,6 +210,19 @@ class TestTable:
         assert table.seats[1].is_button
         assert table.seats[2].is_small_blind
         assert table.seats[3].is_big_blind
+
+    def test_rotate_button_preserves_blind_amounts(self):
+        """Rotating the button must not reset custom blind stakes to 1/2."""
+        table = Table(6)
+        players = [Player("Alice", i, 1000) for i in range(6)]
+        for player in players:
+            table.add_player(player)
+
+        table.set_blinds(0, 25, 50)
+        table.rotate_button()
+
+        assert table.small_blind_amount == 25
+        assert table.big_blind_amount == 50
 
     def test_advance_street(self):
         """Test advancing through streets."""

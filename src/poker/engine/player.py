@@ -184,7 +184,11 @@ class HumanPlayer(Player):
         return self.action_required
 
     def get_action(self, game_state: dict) -> "Any":
-        """Get the player's pending action from the UI.
+        """Get and consume the player's pending action from the UI.
+
+        The pending action is cleared after being returned, so a stale
+        choice from an earlier turn can never be silently reused later in
+        the same hand.
 
         Returns:
             The Action that was set via set_action()
@@ -194,7 +198,9 @@ class HumanPlayer(Player):
         """
         if self.pending_action is None:
             raise RuntimeError(f"Player {self.name} is waiting for action but none has been set.")
-        return self.pending_action
+        action = self.pending_action
+        self.pending_action = None
+        return action
 
 
 class AIPlayer(Player):

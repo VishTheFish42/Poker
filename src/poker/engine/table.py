@@ -69,6 +69,8 @@ class Table:
         self.button_seat: Optional[int] = None
         self.small_blind_seat: Optional[int] = None
         self.big_blind_seat: Optional[int] = None
+        self.small_blind_amount = 1
+        self.big_blind_amount = 2
 
     def __repr__(self) -> str:
         """Return a string representation of the table."""
@@ -161,6 +163,15 @@ class Table:
     def set_blinds(self, button_seat: int, small_blind_amount: int, big_blind_amount: int) -> None:
         """Set the blind positions and amounts.
 
+        Blind seats are found by walking forward through ACTIVE players only,
+        so gaps from empty seats or busted (sitting-out) players are skipped
+        rather than landing a blind on a seat that can't post one. Heads-up
+        (exactly 2 active players) is a special case: the button itself
+        posts the small blind and acts first pre-flop, while the other
+        player posts the big blind and acts first post-flop. With 3+ active
+        players, the small/big blind are the next two active seats to the
+        left of the button as usual.
+
         Args:
             button_seat: The seat number of the dealer button
             small_blind_amount: The small blind amount
@@ -172,25 +183,57 @@ class Table:
 
         self.button_seat = button_seat
         self.seats[button_seat].is_button = True
+        self.small_blind_amount = small_blind_amount
+        self.big_blind_amount = big_blind_amount
 
-        # Small blind is to the left of button
-        small_blind_seat = (button_seat + 1) % self.num_seats
-        self.small_blind_seat = small_blind_seat
-        self.seats[small_blind_seat].is_small_blind = True
-
-        # Big blind is to the left of small blind
-        big_blind_seat = (button_seat + 2) % self.num_seats
-        self.big_blind_seat = big_blind_seat
-        self.seats[big_blind_seat].is_big_blind = True
-
-    def rotate_button(self) -> None:
-        """Advance the dealer button and recompute blind positions."""
-        if self.button_seat is None:
-            self.set_blinds(0, 1, 2)
+        active_seats = [p.seat for p in self.get_active_players()]
+        if len(active_seats) <= 1:
+            # Not enough active players to post blinds.
+            self.small_blind_seat = None
+            self.big_blind_seat = None
             return
 
-        next_button = (self.button_seat + 1) % self.num_seats
-        self.set_blinds(next_button, 1, 2)
+        if len(active_seats) == 2:
+            other = next((s for s in active_seats if s != button_seat), button_seat)
+            self.small_blind_seat = button_seat
+            self.big_blind_seat = other
+        else:
+            # Small blind is the next active seat left of button; big blind
+            # is the next active seat after that - skipping any empty or
+            # busted seats in between.
+            self.small_blind_seat = self.get_next_active_player(button_seat)
+            self.big_blind_seat = self.get_next_active_player(self.small_blind_seat)
+
+        self.seats[self.small_blind_seat].is_small_blind = True
+        self.seats[self.big_blind_seat].is_big_blind = True
+
+    def rotate_button(self) -> None:
+        """Advance the dealer button to the next active seat and recompute
+        blind positions.
+
+        Blind amounts carry over from the current configuration (or the
+        default 1/2 if blinds haven't been set yet). The button always lands
+        on an active player - empty seats and busted (sitting-out) players
+        are skipped, so it can't get stranded on a seat that isn't playing.
+        """
+        if self.button_seat is None:
+            first_active = self._first_active_seat()
+            self.set_blinds(first_active, self.small_blind_amount, self.big_blind_amount)
+            return
+
+        next_button = self.get_next_active_player(self.button_seat)
+        if next_button is None:
+            next_button = self.button_seat  # fewer than 2 active players left
+        self.set_blinds(next_button, self.small_blind_amount, self.big_blind_amount)
+
+    def _first_active_seat(self) -> int:
+        """Find the first occupied seat with an active player, for the very
+        first hand at the table (before any button has been set).
+        """
+        for seat in self.seats:
+            if seat.is_occupied() and seat.player.can_act():
+                return seat.seat_number
+        return 0
 
     def deal_hole_cards(self) -> None:
         """Deal hole cards to all players in the hand."""

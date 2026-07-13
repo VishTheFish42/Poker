@@ -17,11 +17,11 @@
 2.7 [x] Add hand showdown resolution and tie-breaking.
 
 ## Phase 3: Interactive Game Flow
-3.1 Build the game controller to manage round progression.
-3.2 Integrate user actions: fold, check/call, bet, raise.
-3.3 Add turn order and action validation rules.
-3.4 Handle automatic round advancement when players act.
-3.5 Implement human player prompts and action feedback.
+3.1 [x] Build the game controller to manage round progression.
+3.2 [x] Integrate user actions: fold, check/call, bet, raise.
+3.3 [x] Add turn order and action validation rules.
+3.4 [x] Handle automatic round advancement when players act.
+3.5 [x] Implement human player prompts and action feedback.
 
 ## Phase 4: GUI Implementation
 4.1 Create the main application window.
@@ -64,8 +64,8 @@
 
 ## Task Breakdown
 1. [x] Task 1: Setup repo, dependencies, and environment.
-2. Task 2: Implement `Card`, `Deck`, `HandEvaluator`, `Player`, `Table`, `GameEngine`.
-3. Task 3: Build `GameController` and betting round logic.
+2. [x] Task 2: Implement `Card`, `Deck`, `HandEvaluator`, `Player`, `Table`, `GameEngine`.
+3. [x] Task 3: Build `GameController` and betting round logic.
 4. Task 4: Design the launch lobby and settings interface.
 5. Task 5: Implement the main table UI and player action widgets.
 6. Task 6: Design and implement RL-based `AIPlayer` and `RLAgent`.

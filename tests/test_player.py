@@ -154,6 +154,22 @@ class TestHumanPlayer:
         with pytest.raises(RuntimeError):
             player.get_action({})
 
+    def test_get_action_consumes_pending_action(self):
+        """get_action() must clear pending_action after returning it, so a
+        stale choice from an earlier turn can't be silently reused later
+        in the same hand.
+        """
+        player = HumanPlayer("Alice", 0, 1000)
+        mock_action = {"type": "fold"}
+        player.set_action(mock_action)
+
+        result = player.get_action({})
+
+        assert result == mock_action
+        assert player.pending_action is None
+        with pytest.raises(RuntimeError):
+            player.get_action({})  # calling again with nothing new staged
+
 
 class TestAIPlayer:
     """Test cases for AIPlayer."""

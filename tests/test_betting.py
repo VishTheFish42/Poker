@@ -121,28 +121,48 @@ class TestBettingRound:
         assert self.table.total_pot == 5  # 1 + 2 + 2
 
     def test_bet_action(self):
-        """Test processing a bet action."""
+        """Test processing a bet action on a fresh street (nothing to call)."""
+        br = BettingRound(self.table, 1, 2, 1)
+        # Flop-style round: no blinds posted, no bet yet.
+        player = self.table.get_player(0)
+        initial_stack = player.stack
+        action = Action(ActionType.BET, 0, 50)
+        br.process_action(action)
+
+        assert len(br.actions) == 1
+        assert player.stack == initial_stack - 50
+        assert br.player_bet_amounts[0] == 50
+        assert br.highest_bet == 50
+        assert br.min_raise_amount == 50
+        assert self.table.total_pot == 50
+
+    def test_bet_below_minimum_rejected(self):
+        """A bet smaller than min_raise_amount (the big blind, on a fresh
+        street) is not a legal opening bet - the player must bet at least
+        the minimum, or go all-in for their whole (short) stack instead.
+        """
+        br = BettingRound(self.table, 1, 2, 1)  # big_blind_amount=2
+        action = Action(ActionType.BET, 0, 1)
+
+        with pytest.raises(ValueError):
+            br.process_action(action)
+
+    def test_bet_after_prior_contribution_this_round(self):
+        """A BET from a player who already has chips in this round (e.g. the
+        big blind exercising its option to raise) must count their FULL
+        round total in highest_bet, not just the newly added chips.
+        """
         br = BettingRound(self.table, 1, 2, 1)
         br.initialize_blinds()
+        br.process_action(Action(ActionType.CALL, 0, 2))  # button calls
+        br.process_action(Action(ActionType.CALL, 1, 1))  # SB calls
 
-        # Big blind checks first
-        bb_action = Action(ActionType.CHECK, 2)
-        br.process_action(bb_action)
+        # BB (already has $2 in from the blind) bets $50 more instead of checking.
+        br.process_action(Action(ActionType.BET, 2, 50))
 
-        # Small blind tries to bet (must be all action)
-        br.player_bet_amounts[1] = 1
-        br.player_bet_amounts[2] = 2
-
-        # Now button can bet (if we reset the highest bet scenario)
-        br.highest_bet = 2
-        br.player_bet_amounts[0] = 2
-
-        player = self.table.get_player(1)
-        action = Action(ActionType.BET, 1, 50)
-
-        # This should work in a flop scenario where no one has bet yet
-        # For pre-flop with blinds already posted, betting is raising
-        # Let's test a simpler bet scenario
+        assert br.player_bet_amounts[2] == 52
+        assert br.highest_bet == 52
+        assert br.get_amount_to_call(0) == 50  # seat 0 already has $2 in from its earlier call
 
     def test_all_in_action(self):
         """Test processing an all-in action."""
@@ -190,6 +210,48 @@ class TestBettingRound:
         assert bb_player.stack < 998
         assert br.highest_bet == 6
 
+    def test_call_with_entire_stack_marks_all_in(self):
+        """A plain CALL that exhausts a player's stack must mark them ALL_IN,
+        not leave them ACTIVE with $0 (which would make can_act() wrongly
+        keep asking them to act on later streets with nothing left to bet).
+        """
+        table = Table(3)
+        players = [Player("P" + str(i), i, 1000) for i in range(3)]
+        for player in players:
+            table.add_player(player)
+        table.set_blinds(0, 1, 2)
+
+        short_stack = table.get_player(1)
+        short_stack.stack = 5  # will be fully used up calling a $5 bet
+
+        br = BettingRound(table, 1, 2, 1)
+        br.highest_bet = 5
+        action = Action(ActionType.CALL, 1, 5)
+        br.process_action(action)
+
+        assert short_stack.stack == 0
+        assert short_stack.status == PlayerStatus.ALL_IN
+
+    def test_short_blind_marks_all_in(self):
+        """Posting a blind with less than the full blind amount (because the
+        stack is smaller) must mark the player ALL_IN, not leave them ACTIVE
+        with $0 unable to take any valid action on the next street.
+        """
+        table = Table(3)
+        players = [Player("P" + str(i), i, 1000) for i in range(3)]
+        for player in players:
+            table.add_player(player)
+        table.set_blinds(0, 1, 2)
+
+        short_bb = table.get_player(2)
+        short_bb.stack = 1  # less than the $2 big blind
+
+        br = BettingRound(table, 1, 2, 1)
+        br.initialize_blinds()
+
+        assert short_bb.stack == 0
+        assert short_bb.status == PlayerStatus.ALL_IN
+
     def test_get_next_to_act(self):
         """Test determining next player to act."""
         br = BettingRound(self.table, 1, 2, 1)
@@ -203,6 +265,67 @@ class TestBettingRound:
         br.process_action(action)
         # At this point we've processed one action
         assert len(br.actions) == 1
+
+    def test_get_next_to_act_advances_and_terminates(self):
+        """get_next_to_act must move to the NEXT player after each action and
+        must eventually return None once everyone has matched the bet -
+        it must not get stuck repeating the same seat forever.
+        """
+        br = BettingRound(self.table, 1, 2, 1)
+        br.initialize_blinds()
+
+        order = []
+        for _ in range(10):  # safety cap; a correct round finishes in 3 steps
+            nxt = br.get_next_to_act()
+            order.append(nxt)
+            if nxt is None:
+                break
+            amt = br.get_amount_to_call(nxt)
+            action = Action(ActionType.CALL, nxt, amt) if amt > 0 else Action(ActionType.CHECK, nxt)
+            br.process_action(action)
+
+        # Starting at seat 1 (small blind): SB calls, BB checks its option,
+        # button calls last, then the round is complete.
+        assert order == [1, 2, 0, None]
+        assert br.round_complete
+
+    def test_check_around_requires_every_player_to_act(self):
+        """With no bet yet (highest_bet=0), the round must not be declared
+        complete just because bet amounts trivially match - each player must
+        actually act (check) at least once.
+        """
+        br = BettingRound(self.table, 1, 2, 1)  # no initialize_blinds(): fresh street
+
+        first = br.get_next_to_act()
+        br.process_action(Action(ActionType.CHECK, first))
+        assert not br._is_round_complete()  # other two players haven't acted yet
+
+        second = br.get_next_to_act()
+        assert second is not None and second != first
+        br.process_action(Action(ActionType.CHECK, second))
+        assert not br._is_round_complete()
+
+        third = br.get_next_to_act()
+        assert third is not None and third not in (first, second)
+        br.process_action(Action(ActionType.CHECK, third))
+        assert br._is_round_complete()
+
+    def test_raise_reopens_action_for_players_who_already_acted(self):
+        """A raise must force players who already matched the old bet to act again."""
+        br = BettingRound(self.table, 1, 2, 1)
+        br.initialize_blinds()
+
+        # Button calls the big blind.
+        br.process_action(Action(ActionType.CALL, 0, 2))
+        # Small blind calls too - everyone has now matched $2, except BB's option.
+        br.process_action(Action(ActionType.CALL, 1, 1))
+        # Big blind raises instead of checking its option.
+        br.process_action(Action(ActionType.RAISE, 2, 4))
+
+        # Button and small blind already "acted" under the old bet level but
+        # must be forced to respond again to the raise.
+        assert not br._is_round_complete()
+        assert br.get_next_to_act() == 0
 
     def test_is_round_complete(self):
         """Test checking if round is complete."""
@@ -241,6 +364,81 @@ class TestBettingRound:
 
         all_in_seats = br.get_players_all_in()
         assert 0 in all_in_seats
+
+    def test_all_in_after_prior_bet_this_round(self):
+        """All-in from a player who already has chips in for the round (e.g.
+        the big blind) must count their FULL round total toward highest_bet,
+        not just the incremental chips added by the all-in action.
+        """
+        br = BettingRound(self.table, 1, 2, 1)
+        br.initialize_blinds()
+
+        bb_player = self.table.get_player(2)  # already has $2 in from the blind
+        bb_stack_before = bb_player.stack
+        action = Action(ActionType.ALL_IN, 2, bb_stack_before)
+        br.process_action(action)
+
+        expected_total = 2 + bb_stack_before  # blind already posted + all-in chips
+        assert br.player_bet_amounts[2] == expected_total
+        assert br.highest_bet == expected_total
+        # Another player should now owe the full total, not just the shove amount
+        assert br.get_amount_to_call(0) == expected_total
+
+    def test_incomplete_all_in_raise_caps_previously_acted_players(self):
+        """An all-in that raises the bet by LESS than a full raise increment
+        ("incomplete raise") must not reopen re-raising rights for players
+        who already matched the old bet - they may only call the extra
+        amount or fold, not raise again. A subsequent FULL raise clears
+        the cap for everyone.
+        """
+        table = Table(4)
+        players = [Player("P" + str(i), i, 1000) for i in range(4)]
+        for player in players:
+            table.add_player(player)
+        table.set_blinds(0, 50, 100)
+
+        br = BettingRound(table, 50, 100, start_seat=3)  # UTG in 4-handed
+        br.initialize_blinds()
+        br.process_action(Action(ActionType.CALL, 3, 100))  # UTG calls the $100 BB
+
+        players[0].stack = 150  # button can only shove for 150 (a $50 raise - incomplete)
+        br.process_action(Action(ActionType.ALL_IN, 0, 150))
+
+        assert 3 in br.capped_seats  # UTG already matched the old bet, now capped
+        with pytest.raises(ValueError):
+            br.process_action(Action(ActionType.RAISE, 3, 200))
+
+        # UTG can still call the extra amount.
+        br.process_action(Action(ActionType.CALL, 3, br.get_amount_to_call(3)))
+        assert br.player_bet_amounts[3] == 150
+
+        # A subsequent FULL raise (from a player who hadn't acted yet) clears the cap.
+        players[1].stack = 1000
+        br.process_action(Action(ActionType.RAISE, 1, 200))
+        assert br.capped_seats == set()
+
+    def test_full_all_in_raise_does_not_cap_anyone(self):
+        """An all-in that raises by AT LEAST a full raise increment behaves
+        like a normal raise: it fully reopens the action, with no cap.
+        """
+        table = Table(4)
+        players = [Player("P" + str(i), i, 1000) for i in range(4)]
+        for player in players:
+            table.add_player(player)
+        table.set_blinds(0, 50, 100)
+
+        br = BettingRound(table, 50, 100, start_seat=3)
+        br.initialize_blinds()
+        br.process_action(Action(ActionType.CALL, 3, 100))
+
+        players[0].stack = 300  # a full $200 raise on top of the $100 bet
+        br.process_action(Action(ActionType.ALL_IN, 0, 300))
+
+        assert br.capped_seats == set()
+        # UTG (already called $100, stack correspondingly reduced) should be
+        # free to re-raise in response to this full raise.
+        br.process_action(Action(ActionType.RAISE, 3, 300))
+        assert br.highest_bet == 600
 
     def test_street_results(self):
         """Test getting street results."""

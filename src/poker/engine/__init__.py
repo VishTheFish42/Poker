@@ -8,6 +8,7 @@ from .table import Table, GameState
 from .betting import BettingRound
 from .pot_manager import Pot, PotManager
 from .showdown import PlayerResult, ShowdownResult, Showdown
+from .controller import GameController
 
 __all__ = [
     "Card",
@@ -33,4 +34,5 @@ __all__ = [
     "PlayerResult",
     "ShowdownResult",
     "Showdown",
+    "GameController",
 ]
