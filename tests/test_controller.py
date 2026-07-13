@@ -72,6 +72,44 @@ class TestStartNewHand:
         assert players[2].stack == 4950
 
 
+class TestStartNewHandWithBustedPlayers:
+    """A busted opponent used to crash start_new_hand() with a raw
+    TypeError from Table.get_next_active_player(None), because
+    set_blinds() leaves button/blind seats as None when fewer than 2
+    players have chips left - see _first_to_act_seat().
+    """
+
+    def test_raises_clear_error_instead_of_crashing(self):
+        gc, table, players = make_controller(num_players=2, stack=1000)
+        gc.start_new_hand()
+        players[1].stack = 0  # seat 1 busts out between hands
+
+        with pytest.raises(RuntimeError, match="fewer than 2 players"):
+            gc.start_new_hand()
+
+    def test_previous_hand_result_is_preserved_on_failure(self):
+        gc, table, players = make_controller(num_players=2, stack=1000)
+        gc.start_new_hand()
+        call_or_check(gc, gc.get_current_player().seat)
+        call_or_check(gc, gc.get_current_player().seat)
+        previous_hand_number = gc.hand_number
+        players[1].stack = 0
+
+        with pytest.raises(RuntimeError):
+            gc.start_new_hand()
+
+        assert gc.hand_number == previous_hand_number
+
+    def test_three_handed_with_one_bust_can_still_continue(self):
+        gc, table, players = make_controller(num_players=3, stack=1000)
+        gc.start_new_hand()
+        players[2].stack = 0  # only one player busts; 2 active players remain
+
+        gc.start_new_hand()  # should not raise
+
+        assert gc.table.get_player(2).status.value == "sitting_out"
+
+
 class TestRoundProgression:
     def test_full_hand_checks_through_to_showdown(self):
         gc, table, players = make_controller()

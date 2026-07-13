@@ -73,8 +73,21 @@ class GameController:
     def start_new_hand(self) -> None:
         """Begin a new hand: rotate the button, post blinds, deal hole cards,
         and open the pre-flop betting round.
+
+        Raises:
+            RuntimeError: If fewer than 2 seated players have chips left
+                to play with (the game is effectively over) - checked
+                before the button rotates, blinds post, or cards are
+                dealt, so a caught error leaves `hand_number` and
+                `last_result` (the previous hand's outcome) untouched.
         """
         self.table.reset_for_new_hand()
+
+        if len(self.table.get_active_players()) < 2:
+            raise RuntimeError(
+                "Cannot start a new hand: fewer than 2 players have chips remaining."
+            )
+
         self.pot_manager.reset()
         self.total_contributions = {}
         self.last_result = None
