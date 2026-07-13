@@ -33,12 +33,12 @@
 4.7 [x] Polish the visuals with card art, animations, and layout styling.
 
 ## Phase 5: Reinforcement Learning AI
-5.1 Define the AI observation space and action space.
-5.2 Implement one or more RL agents for computer-controlled players.
-5.3 Create reward logic based on hand outcomes, chips won, and decisions.
-5.4 Add an online training loop to update AI decisions during play.
-5.5 Provide difficulty modes and policy persistence.
-5.6 Test AI behavior in simulated training matches.
+5.1 [x] Define the AI observation space and action space.
+5.2 [x] Implement one or more RL agents for computer-controlled players.
+5.3 [x] Create reward logic based on hand outcomes, chips won, and decisions.
+5.4 [x] Add an online training loop to update AI decisions during play.
+5.5 [x] Provide difficulty modes and policy persistence.
+5.6 [x] Test AI behavior in simulated training matches.
 
 ## Phase 6: Integration and UX Polishing
 6.1 Connect the game engine to the UI.

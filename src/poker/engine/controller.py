@@ -168,8 +168,11 @@ class GameController:
         """Build a snapshot of the current state for a player's get_action().
 
         This is a generic, engine-level view - enough for a human UI
-        callback or a simple AI policy to decide with. It is not the
-        specialized observation encoding Phase 5's RL agents will use.
+        callback or a simple heuristic policy to decide with directly. It
+        also carries the live `controller` itself so an `RLAgent` (Task
+        5.2) can build the richer `poker.ai.observation.ObservationEncoder`
+        feature vector, which needs more context (opponent stacks, button
+        position, contributions) than the flat fields below provide.
         """
         player = self.get_current_player()
         return {
@@ -179,6 +182,7 @@ class GameController:
             "hole_cards": list(player.hole_cards) if player else [],
             "stack": player.stack if player else 0,
             "legal_actions": self.get_legal_actions(),
+            "controller": self,
         }
 
     def submit_action(self, action: Action) -> None:
