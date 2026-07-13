@@ -24,13 +24,13 @@
 3.5 [x] Implement human player prompts and action feedback.
 
 ## Phase 4: GUI Implementation
-4.1 Create the main application window.
-4.2 Build screens for the lobby, table, and end-of-hand results.
-4.3 Display seat layout, chip stacks, community cards, and player names.
-4.4 Add interactive buttons for player actions.
-4.5 Implement a game log and status panel.
-4.6 Add UI controls for buy-in, blinds, and restart options.
-4.7 Polish the visuals with card art, animations, and layout styling.
+4.1 [x] Create the main application window.
+4.2 [x] Build screens for the lobby, table, and end-of-hand results.
+4.3 [x] Display seat layout, chip stacks, community cards, and player names.
+4.4 [x] Add interactive buttons for player actions.
+4.5 [x] Implement a game log and status panel.
+4.6 [x] Add UI controls for buy-in, blinds, and restart options.
+4.7 [x] Polish the visuals with card art, animations, and layout styling.
 
 ## Phase 5: Reinforcement Learning AI
 5.1 Define the AI observation space and action space.
