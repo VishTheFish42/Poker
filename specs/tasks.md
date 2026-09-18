@@ -10,12 +10,12 @@ Phases are organized around the engine / bindings / AI / frontend split describe
 
 ## Phase 2: Core Poker Engine (C++)
 2.1 [x] Implement `Card` and `Deck` abstractions, with GoogleTest coverage.
-2.2 [ ] Build a `HandEvaluator` for Texas Hold'em rankings (high card through royal flush).
-2.3 [ ] Design `Player` and `Table` (seat) models.
-2.4 [ ] Implement `BettingRound` and game state management.
-2.5 [ ] Add blind posting and dealer button rotation.
-2.6 [ ] Implement `PotManager` pooling and side pot management.
-2.7 [ ] Add `Showdown` hand resolution and tie-breaking.
+2.2 [x] Build a `HandEvaluator` for Texas Hold'em rankings (high card through royal flush).
+2.3 [x] Design `Player` and `Table` (seat) models.
+2.4 [x] Implement `BettingRound` and game state management.
+2.5 [x] Add blind posting (`BettingRound::initializeBlinds`) and dealer button rotation (`Table::setBlinds`/`rotateButton`).
+2.6 [x] Implement `PotManager` pooling and side pot management.
+2.7 [x] Add `Showdown` hand resolution and tie-breaking.
 
 ## Phase 3: Interactive Game Flow (C++)
 3.1 [ ] Build `GameController` to manage hand/round progression.
@@ -49,15 +49,15 @@ Phases are organized around the engine / bindings / AI / frontend split describe
 Blocked on Phase 6: error handling and clean restart at the integration layer, smooth turn pacing, and result feedback, once there's a frontend to integrate.
 
 ## Phase 8: Testing and Quality Assurance
-8.1 [~] GoogleTest coverage for the engine — in progress alongside Phase 2/3 (`engine/tests/`, 2 suites / 16 tests so far).
-8.2 [ ] Full game flow tests (all betting rounds, a complete hand) in C++.
-8.3 [ ] Pot splitting and side-pot case coverage in C++.
+8.1 [~] GoogleTest coverage for the engine — in progress alongside Phase 2/3 (`engine/tests/`, 10 suites / 95 tests so far, covering Card/Deck/HandEvaluator/Player/Table/BettingRound/PotManager/Showdown).
+8.2 [ ] Full game flow tests (all betting rounds, a complete hand) in C++ — needs `GameController` (Phase 3).
+8.3 [x] Pot splitting and side-pot case coverage in C++ (`test_pot_manager.cpp`, `test_betting_round.cpp`'s incomplete-raise cases).
 8.4 [ ] pytest coverage for the bindings (Phase 4.3) and the wired-up AI layer (Phase 5.7).
 8.5 [ ] Manual UX tests — blocked on Phase 6.
 8.6 [ ] Document how to build the engine, run its tests, build the bindings, and run AI training.
 
 ## Milestones
-1. Working C++ engine with full Texas Hold'em rules and GoogleTest coverage (Phases 2-3).
+1. Working C++ engine with full Texas Hold'em rules and GoogleTest coverage (Phases 2-3). Phase 2's building blocks (hand evaluation, players/table, betting, pots, showdown) are done; `GameController` (Phase 3) ties them into a playable hand.
 2. Python bindings that let a scripted driver play a full hand with no frontend (Phase 4).
 3. AI opponents integrated against the bound engine and demonstrably learning (Phase 5.7).
 4. Frontend approach chosen and a basic playable UI built against the stable engine/bindings API (Phase 6).
@@ -66,8 +66,8 @@ Blocked on Phase 6: error handling and clean restart at the integration layer, s
 ## Task Breakdown
 1. [x] Task 1: Set up the C++/Python repo layout, CMake + GoogleTest toolchain, and specs.
 2. [x] Task 2: Implement `Card` and `Deck` in C++.
-3. [ ] Task 3: Implement `HandEvaluator`.
-4. [ ] Task 4: Implement `Player`, `Table`, `BettingRound`, `PotManager`, `Showdown`.
+3. [x] Task 3: Implement `HandEvaluator`.
+4. [x] Task 4: Implement `Player`, `Table`, `BettingRound`, `PotManager`, `Showdown`.
 5. [ ] Task 5: Implement `GameController` and full-hand GoogleTest coverage.
 6. [ ] Task 6: Implement the pybind11 bindings module and its pytest suite.
 7. [ ] Task 7: Wire the Python AI layer to the bound engine.

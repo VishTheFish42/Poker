@@ -1,6 +1,13 @@
 add_library(poker_engine
     src/card.cpp
     src/deck.cpp
+    src/hand_evaluator.cpp
+    src/action.cpp
+    src/player.cpp
+    src/table.cpp
+    src/betting_round.cpp
+    src/pot_manager.cpp
+    src/showdown.cpp
 )
 
 target_include_directories(poker_engine

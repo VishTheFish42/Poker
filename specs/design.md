@@ -15,13 +15,13 @@ This is not quite MVC anymore: there is no single "Controller" shared across lan
 ### `engine/` (C++)
 - `Card` / `Suit` / `Rank`: suit and rank value types. (Implemented — see `engine/include/poker/card.hpp`.)
 - `Deck`: generates, shuffles, and deals a 52-card deck. (Implemented — see `engine/include/poker/deck.hpp`.)
-- `HandEvaluator`: computes Texas Hold'em hand strength and rank ordering from seven cards.
-- `Player`: seat ownership, stack size, hole cards, and status (active / folded / all-in / out). A single concrete class — there is no `HumanPlayer`/`AIPlayer` split in the engine, because the engine doesn't care who's deciding; that distinction exists only in the Python orchestration layer.
-- `Table`: holds players, dealer position, blinds, community cards, and pot state.
-- `BettingRound`: manages action order, permissible actions, and current bets for one street.
-- `PotManager`: tracks the main pot and side pots.
-- `Showdown`: resolves hand comparisons and pot distribution, including ties and split pots.
-- `GameController`: orchestrates a hand — dealing, blind posting, round transitions, showdown — and exposes both a fully-automatic `advance()` and a single-step `stepOnce()`, since a caller (an AI loop, tests, a future frontend) needs to pace turns one at a time rather than jump straight to the final state.
+- `HandEvaluator`: computes Texas Hold'em hand strength and rank ordering from seven cards. (Implemented — see `engine/include/poker/hand_evaluator.hpp`.)
+- `Player`: seat ownership, stack size, hole cards, and status (active / folded / all-in / out). A single concrete class — there is no `HumanPlayer`/`AIPlayer` split in the engine, because the engine doesn't care who's deciding; that distinction exists only in the Python orchestration layer. (Implemented — see `engine/include/poker/player.hpp`.)
+- `Table`: holds players, dealer position, blinds, community cards, and pot state. (Implemented — see `engine/include/poker/table.hpp`.)
+- `BettingRound`: manages action order, permissible actions, and current bets for one street. (Implemented — see `engine/include/poker/betting_round.hpp`.)
+- `PotManager`: tracks the main pot and side pots. (Implemented — see `engine/include/poker/pot_manager.hpp`.)
+- `Showdown`: resolves hand comparisons and pot distribution, including ties and split pots. (Implemented — see `engine/include/poker/showdown.hpp`.)
+- `GameController`: orchestrates a hand — dealing, blind posting, round transitions, showdown — and exposes both a fully-automatic `advance()` and a single-step `stepOnce()`, since a caller (an AI loop, tests, a future frontend) needs to pace turns one at a time rather than jump straight to the final state. (Not yet implemented — Phase 3.)
 
 Each class lives as a `<name>.hpp` / `<name>.cpp` pair under `engine/include/poker/` and `engine/src/`, with a matching `engine/tests/test_<name>.cpp`.
 
