@@ -17,5 +17,15 @@ ENV/
 
 # Packages
 *.egg-info/
-/build/
 dist/
+
+# C++ build output
+/build/
+/build-*/
+compile_commands.json
+CMakeUserPresets.json
+
+# Coverage / test artifacts
+.coverage
+htmlcov/
+.pytest_cache/

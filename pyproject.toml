@@ -1,28 +1,27 @@
 [project]
 name = "poker"
 version = "0.1.0"
-description = "Desktop Texas Hold'em poker game with PyQt UI and RL-based AI opponents."
+description = "RL-based AI opponents (PyTorch) for a Texas Hold'em engine written in C++; see engine/ for the rules engine. Frontend TBD."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
     { name = "Vishwa", email = "vishwa@example.com" }
 ]
 requires-python = ">=3.11"
-keywords = ["poker", "texas-hold-em", "game", "ai", "reinforcement-learning", "pyside6"]
+keywords = ["poker", "texas-hold-em", "ai", "reinforcement-learning", "pytorch"]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Topic :: Games/Entertainment :: Fortune Telling",
+    "Topic :: Games/Entertainment :: Turn Based Strategy",
     "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
-    "PySide6>=6.6",
     "torch>=2.0",
     "numpy>=2.0"
 ]
@@ -79,10 +78,10 @@ disallow_incomplete_defs = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
-addopts = "-v --cov=src/poker --cov-report=html --cov-report=term-missing"
+addopts = "-v --cov=src/poker/ai --cov-report=html --cov-report=term-missing"
 
 [tool.coverage.run]
-source = ["src/poker"]
+source = ["src/poker/ai"]
 omit = [
     "*/tests/*",
     "*/__main__.py",

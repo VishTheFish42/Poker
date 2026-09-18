@@ -1,266 +1,145 @@
 # Development Environment Setup
 
 ## Overview
-This document describes how to set up a local development environment for the Poker project.
+This document describes how to set up a local development environment for the Poker project, which now spans two toolchains: a C++ engine and a Python AI layer. There is no frontend yet (see `specs/tasks.md` Phase 6).
 
 ## Prerequisites
-- Python 3.11 or higher
+- A C++20 compiler (Apple Clang, GCC, or MSVC)
+- CMake 3.21+
+- GoogleTest (optional — `brew install googletest` on macOS; CMake fetches it automatically if not found)
+- Python 3.11 or higher (for the AI layer only)
 - Git
-- pip (Python package manager)
-- macOS, Windows, or Linux
 
-## Step 1: Clone the Repository
+## Part 1: C++ Engine
 
+### Clone and Configure
 ```bash
 git clone https://github.com/VishTheFish42/Poker.git
 cd Poker
+cmake -S . -B build
+```
+`find_package(GTest)` is tried first; if GoogleTest isn't installed locally, CMake fetches it from source via `FetchContent` (requires network access that first time).
+
+### Build
+```bash
+cmake --build build -j
 ```
 
-## Step 2: Create a Virtual Environment
+### Run Tests
+```bash
+./build/engine/tests/poker_engine_tests
+```
+Or, using CTest (also picks up GoogleTest's per-case discovery):
+```bash
+ctest --test-dir build --output-on-failure
+```
 
-A virtual environment isolates project dependencies from your system Python.
+### Project Layout
+```
+engine/
+├── CMakeLists.txt
+├── include/poker/       # public headers (card.hpp, deck.hpp, ...)
+├── src/                 # implementations
+└── tests/               # GoogleTest suite (test_card.cpp, test_deck.cpp, ...)
+```
 
+### Optional: Python Bindings
+The pybind11 bindings target is scaffolded but not implemented yet (`bindings/CMakeLists.txt`). Once there's a module to build there:
+```bash
+cmake -S . -B build -DPOKER_BUILD_PYTHON_BINDINGS=ON
+cmake --build build -j
+```
+
+## Part 2: Python AI Layer
+
+### Create a Virtual Environment
 ```bash
 python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\Activate.ps1
 ```
 
-### Activate the Virtual Environment
-
-**On macOS/Linux:**
-```bash
-source .venv/bin/activate
-```
-
-**On Windows (PowerShell):**
-```bash
-.venv\Scripts\Activate.ps1
-```
-
-**On Windows (Command Prompt):**
-```bash
-.venv\Scripts\activate.bat
-```
-
-You should see `(.venv)` in your terminal prompt when activated.
-
-## Step 3: Upgrade pip
-
+### Install Dependencies
 ```bash
 pip install --upgrade pip
-```
-
-## Step 4: Install Project Dependencies
-
-### For Runtime
-Install core dependencies required to run the game:
-
-```bash
-pip install -r requirements.txt
-```
-
-### For Development (Recommended)
-Install additional development tools including testing, linting, and formatting:
-
-```bash
 pip install -r requirements-dev.txt
 ```
 
-## Step 5: Verify Installation
-
-Test that the environment is set up correctly:
-
+### Run Tests
 ```bash
-python -c "import PySide6; import torch; import numpy; print('All dependencies imported successfully!')"
+pytest tests/
 ```
+Note: `src/poker/ai/` imports `poker.engine`, provided by the pybind11 bindings (`specs/tasks.md` Phase 4/5.7). Its tests run once that module exists and the AI layer is wired to it.
 
-To verify the application can start:
+### Code Formatting and Linting
 ```bash
-python main.py
-```
-
-## Project Structure
-
-```
-Poker/
-├── .venv/                    # Virtual environment (created)
-├── src/poker/               # Main package
-│   ├── engine/              # Game logic
-│   ├── ui/                  # User interface
-│   ├── ai/                  # AI and RL agents
-│   └── utils/               # Utilities
-├── tests/                   # Test suite
-├── specs/                   # Project specifications
-├── main.py                  # Application entry point
-├── requirements.txt         # Runtime dependencies
-├── requirements-dev.txt     # Development dependencies
-├── pyproject.toml           # Project metadata and config
-├── .gitignore               # Git ignore patterns
-└── README.md                # Project overview
+black src/ tests/
+flake8 src/ tests/
+mypy src/
 ```
 
 ## Dependency Manifest
 
-### Runtime Dependencies (`requirements.txt`)
+### C++ (fetched by CMake, not manually managed)
+| Dependency | Purpose |
+|---|---|
+| GoogleTest | Engine unit tests |
+| pybind11 | Python bindings (once implemented) |
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| PySide6 | >=6.6 | Desktop GUI framework |
-| torch | >=2.2 | Neural network library for RL agents |
-| numpy | >=2.0 | Numerical computations |
+### Python Runtime (`requirements.txt`)
+| Package | Purpose |
+|---|---|
+| torch | Neural network library for RL agents |
+| numpy | Numerical computations |
 
-### Development Dependencies (`requirements-dev.txt`)
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| pytest | >=7.0 | Unit testing framework |
-| pytest-cov | >=4.0 | Code coverage reporting |
-| black | >=23.0 | Code formatter |
-| flake8 | >=6.0 | Linter for code quality |
-| mypy | >=1.0 | Static type checker |
-| sphinx | >=5.0 | Documentation generator |
-
-## Development Workflow
-
-### Running Tests
-
-```bash
-pytest tests/
-```
-
-Run with coverage report:
-```bash
-pytest --cov=src/poker tests/
-```
-
-### Code Formatting
-
-Format code with Black:
-```bash
-black src/ tests/
-```
-
-### Linting
-
-Check code quality with Flake8:
-```bash
-flake8 src/ tests/
-```
-
-Check type hints with mypy:
-```bash
-mypy src/
-```
-
-### Running the Application
-
-```bash
-python main.py
-```
-
-### Building Documentation
-
-```bash
-cd docs/
-make html
-```
+### Python Development (`requirements-dev.txt`)
+Adds `pytest`, `pytest-cov`, `black`, `flake8`, `mypy` on top of the runtime deps.
 
 ## Common Tasks
 
-### Adding a New Dependency
+### Adding a New Engine Class
+1. Add `engine/include/poker/<name>.hpp` and `engine/src/<name>.cpp`.
+2. Add it to `add_library(poker_engine ...)` in `engine/CMakeLists.txt`.
+3. Add `engine/tests/test_<name>.cpp` and list it in `engine/tests/CMakeLists.txt`.
+4. Rebuild and rerun the test binary.
 
-1. Add the package to `requirements.txt` or `requirements-dev.txt`
-2. Run `pip install -r requirements.txt` (or requirements-dev.txt)
-3. Commit the updated requirements file to git
-
-### Deactivating the Virtual Environment
-
-```bash
-deactivate
-```
+### Adding a New Python Dependency
+1. Add it to `requirements.txt` (runtime) or `requirements-dev.txt` (dev-only).
+2. `pip install -r requirements-dev.txt`.
+3. Commit the updated requirements file.
 
 ### Cleaning Up
-
-Remove the virtual environment (safe to regenerate):
 ```bash
-rm -rf .venv
-```
-
-Clear pip cache (optional):
-```bash
-pip cache purge
-```
-
-## Environment Variables
-
-Optional environment variables for configuration (create a `.env` file in the project root):
-
-```
-# Game Configuration
-POKER_SMALL_BLIND=1
-POKER_BIG_BLIND=2
-POKER_INITIAL_STACK=1000
-
-# AI Configuration
-POKER_AI_DIFFICULTY=ADVANCED
-POKER_RL_LEARNING_RATE=0.001
-POKER_RL_BUFFER_SIZE=10000
-
-# UI Configuration
-POKER_THEME=DARK
+rm -rf build        # C++ build directory (safe to regenerate)
+rm -rf .venv         # Python virtual environment (safe to regenerate)
 ```
 
 ## Troubleshooting
 
-### Virtual Environment Not Activating
-- Ensure the path to `.venv` is correct
-- Check that Python 3.11+ is installed: `python --version`
-- Try recreating the virtual environment
+### CMake Can't Find GoogleTest and Has No Network Access
+Install it locally first (`brew install googletest` on macOS, or your distro's package), then re-run `cmake -S . -B build` — `find_package` will pick it up without needing to fetch source.
 
-### Import Errors
-- Verify all dependencies are installed: `pip list`
-- Try reinstalling: `pip install --force-reinstall -r requirements.txt`
-- Check Python version: `python --version` (should be 3.11+)
-
-### PySide6 GUI Not Starting
-- On Linux, you may need additional system libraries (Qt6 development files)
-- On macOS with Apple Silicon, ensure Python is installed for your architecture
-
-### Torch Installation Issues
-- If PyTorch installation is slow or fails, consider using a specific wheel:
-  ```bash
-  pip install torch::https://download.pytorch.org/whl/cpu/torch-2.2.2+cpu-cp311-cp311-...whl
-  ```
+### Python Import Errors in `src/poker/ai/`
+Expected until `specs/tasks.md` Phase 5.7 (wiring the AI layer to the pybind11 bindings) is done — see the note under "Run Tests" above.
 
 ## IDE Setup
 
 ### VS Code
-1. Install the Python extension
-2. Select the interpreter: `.venv/bin/python`
-3. Recommended extensions:
-   - Python
-   - PyLance
-   - Flake8
-   - Black Formatter
-   - Pytest Explorer
+- Install the C/C++ and CMake Tools extensions for engine work; the Python extension for the AI layer.
+- Point CMake Tools at the top-level `CMakeLists.txt`.
+- Select the Python interpreter: `.venv/bin/python`.
 
-### PyCharm
-1. Go to Settings → Project → Python Interpreter
-2. Click the gear icon and select "Add"
-3. Select "Existing Environment" and choose `.venv/bin/python`
+### CLion / Other CMake-aware IDEs
+Open the repository root directly — the top-level `CMakeLists.txt` is the project file.
 
 ## Contributing
-
-When making changes:
-1. Create a new branch: `git checkout -b feature/your-feature`
-2. Make changes and run tests: `pytest tests/`
-3. Format code: `black src/ tests/`
-4. Lint: `flake8 src/ tests/`
-5. Commit and push: `git commit -m "..." && git push origin feature/your-feature`
-6. Open a Pull Request on GitHub
+1. Create a new branch: `git checkout -b feature/your-feature`.
+2. Make changes; rebuild/retest the layer(s) you touched (C++ engine and/or Python AI).
+3. Format/lint whichever side you touched.
+4. Commit and push, then open a Pull Request.
 
 ## References
-
-- [Python Virtual Environments](https://docs.python.org/3/tutorial/venv.html)
-- [PySide6 Documentation](https://doc.qt.io/qtforpython/)
+- [CMake Documentation](https://cmake.org/cmake/help/latest/)
+- [GoogleTest Documentation](https://google.github.io/googletest/)
+- [pybind11 Documentation](https://pybind11.readthedocs.io/)
 - [PyTorch Documentation](https://pytorch.org/docs/)
 - [pytest Documentation](https://docs.pytest.org/)
