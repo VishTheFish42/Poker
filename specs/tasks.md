@@ -7,7 +7,6 @@ Phases are organized around the engine / bindings / AI / frontend split describe
 1.2 [x] Set up the CMake + GoogleTest toolchain for the C++ engine (`find_package` first, `FetchContent` fallback).
 1.3 [x] Scaffold the pybind11 bindings CMake target (build-gated behind `POKER_BUILD_PYTHON_BINDINGS`, not yet implemented).
 1.4 [x] Write `specs/requirements.md` and `specs/design.md` for the engine/bindings/AI/frontend split.
-1.5 [ ] Choose and document the frontend approach (deferred — see Phase 6).
 
 ## Phase 2: Core Poker Engine (C++)
 2.1 [x] Implement `Card` and `Deck` abstractions, with GoogleTest coverage.
