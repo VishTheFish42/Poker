@@ -8,6 +8,7 @@ add_library(poker_engine
     src/betting_round.cpp
     src/pot_manager.cpp
     src/showdown.cpp
+    src/game_controller.cpp
 )
 
 target_include_directories(poker_engine

@@ -23,6 +23,7 @@ add_executable(poker_engine_tests
     test_betting_round.cpp
     test_pot_manager.cpp
     test_showdown.cpp
+    test_game_controller.cpp
 )
 
 target_link_libraries(poker_engine_tests

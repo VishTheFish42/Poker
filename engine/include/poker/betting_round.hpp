@@ -62,6 +62,10 @@ public:
     int minRaiseAmount() const noexcept { return minRaiseAmount_; }
     const std::map<int, int>& playerBetAmounts() const noexcept { return playerBetAmounts_; }
 
+    /// True if `seatNumber` already acted and then faced an incomplete
+    /// all-in raise, so it may only call or fold (not re-raise).
+    bool isCapped(int seatNumber) const { return cappedSeats_.count(seatNumber) > 0; }
+
     /// Seats that went all-in this round, in the order they did so.
     std::vector<int> getPlayersAllIn() const;
 

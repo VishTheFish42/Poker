@@ -29,6 +29,13 @@ public:
     /// Reseeds this deck's RNG, e.g. for a deterministic test shuffle.
     void seed(unsigned int value);
 
+    /// Moves `cards` to the top of the deck so they're dealt next, in the
+    /// given order (`cards[0]` first); the rest keep their current order
+    /// beneath them. For scripted deals (tests, replays). Throws
+    /// std::invalid_argument, leaving the deck unchanged, if a card isn't
+    /// in the deck or is listed twice.
+    void putOnTop(const std::vector<Card>& cards);
+
     /// Removes and returns the top card.
     /// Throws std::out_of_range if the deck is empty.
     Card dealCard();

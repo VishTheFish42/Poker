@@ -77,6 +77,7 @@ TEST(Table, ResetForNewHandClearsPerHandState) {
     EXPECT_TRUE(table.getPlayer(0)->holeCards().empty());
     EXPECT_EQ(table.getPlayer(0)->status(), PlayerStatus::Active);
     EXPECT_TRUE(table.communityCards().empty());
+    EXPECT_TRUE(table.burnedCards().empty());
     EXPECT_EQ(table.totalPot(), 0);
     EXPECT_EQ(table.street(), Street::PreFlop);
     EXPECT_EQ(table.deck().remaining(), Deck::kFullDeckSize);
@@ -103,18 +104,45 @@ TEST(Table, AdvanceStreetDealsFlopTurnRiverThenShowdownThenComplete) {
 
     EXPECT_EQ(table.advanceStreet(), Street::Flop);
     EXPECT_EQ(table.communityCards().size(), 3u);
+    EXPECT_EQ(table.burnedCards().size(), 1u);
 
     EXPECT_EQ(table.advanceStreet(), Street::Turn);
     EXPECT_EQ(table.communityCards().size(), 4u);
+    EXPECT_EQ(table.burnedCards().size(), 2u);
 
     EXPECT_EQ(table.advanceStreet(), Street::River);
     EXPECT_EQ(table.communityCards().size(), 5u);
+    EXPECT_EQ(table.burnedCards().size(), 3u);
 
     EXPECT_EQ(table.advanceStreet(), Street::Showdown);
     EXPECT_EQ(table.communityCards().size(), 5u);
+    EXPECT_EQ(table.burnedCards().size(), 3u);
+    EXPECT_EQ(table.deck().remaining(), Deck::kFullDeckSize - 8);
 
     EXPECT_EQ(table.advanceStreet(), Street::HandComplete);
     EXPECT_THROW(table.advanceStreet(), std::logic_error);
+}
+
+TEST(Table, AdvanceStreetBurnsTheTopCardBeforeEachStreet) {
+    Table table(2);
+    std::vector<Card> order = {
+        Card(Suit::Clubs, Rank::Two),    // burn
+        Card(Suit::Spades, Rank::Ace),   // flop
+        Card(Suit::Spades, Rank::King),  // flop
+        Card(Suit::Spades, Rank::Queen), // flop
+        Card(Suit::Clubs, Rank::Three),  // burn
+        Card(Suit::Spades, Rank::Jack),  // turn
+        Card(Suit::Clubs, Rank::Four),   // burn
+        Card(Suit::Spades, Rank::Ten),   // river
+    };
+    table.deck().putOnTop(order);
+
+    table.advanceStreet();
+    table.advanceStreet();
+    table.advanceStreet();
+
+    EXPECT_EQ(table.burnedCards(), (std::vector<Card>{order[0], order[4], order[6]}));
+    EXPECT_EQ(table.communityCards(), (std::vector<Card>{order[1], order[2], order[3], order[5], order[7]}));
 }
 
 TEST(Table, SetBlindsHeadsUpButtonPostsSmallBlind) {
@@ -205,6 +233,33 @@ TEST(Table, RotateButtonKeepsBlindAmounts) {
 
     EXPECT_EQ(table.smallBlindAmount(), 5);
     EXPECT_EQ(table.bigBlindAmount(), 10);
+}
+
+TEST(Table, SetBlindAmountsAppliesOnNextRotation) {
+    Table table(3);
+    table.addPlayer(Player("Alice", 0, 1000));
+    table.addPlayer(Player("Bob", 1, 1000));
+
+    table.setBlindAmounts(25, 50);
+    EXPECT_FALSE(table.buttonSeat().has_value());
+    table.rotateButton();
+
+    EXPECT_EQ(table.smallBlindAmount(), 25);
+    EXPECT_EQ(table.bigBlindAmount(), 50);
+}
+
+TEST(Table, FinishHandJumpsToCompleteWithoutDealing) {
+    Table table(2);
+    table.addPlayer(Player("Alice", 0, 1000));
+    table.addPlayer(Player("Bob", 1, 1000));
+    table.advanceStreet();  // flop
+    table.setCurrentPlayer(1);
+
+    table.finishHand();
+
+    EXPECT_EQ(table.street(), Street::HandComplete);
+    EXPECT_EQ(table.communityCards().size(), 3u);
+    EXPECT_FALSE(table.currentPlayerSeat().has_value());
 }
 
 TEST(Table, GetNextAndPreviousActivePlayerWrapAndSkipInactive) {

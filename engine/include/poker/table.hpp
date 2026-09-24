@@ -61,6 +61,13 @@ public:
     /// special case: the button posts the small blind.
     void setBlinds(int buttonSeat, int smallBlindAmount, int bigBlindAmount);
 
+    /// Sets the blind amounts `rotateButton()` posts with, without moving
+    /// the button or recomputing blind seats.
+    void setBlindAmounts(int smallBlindAmount, int bigBlindAmount) noexcept {
+        smallBlindAmount_ = smallBlindAmount;
+        bigBlindAmount_ = bigBlindAmount;
+    }
+
     /// Advances the button to the next active seat (or picks the first
     /// active seat if no button has been set yet) and recomputes blinds,
     /// keeping the current blind amounts.
@@ -73,11 +80,21 @@ public:
     /// deck runs out). Returns the cards dealt.
     std::vector<Card> dealCommunityCards(int numCards);
 
-    /// Advances to the next street, dealing the flop/turn/river as
-    /// appropriate. Throws std::logic_error if already HandComplete.
+    /// Advances to the next street, burning one card and then dealing the
+    /// flop/turn/river as appropriate. Throws std::logic_error if already
+    /// HandComplete.
     Street advanceStreet();
 
+    /// Jumps straight to HandComplete (e.g. everyone else folded before
+    /// the river) without dealing any more board cards, and clears the
+    /// current player.
+    void finishHand() noexcept {
+        street_ = Street::HandComplete;
+        currentPlayerSeat_.reset();
+    }
+
     void setCurrentPlayer(int seatNumber) noexcept { currentPlayerSeat_ = seatNumber; }
+    void clearCurrentPlayer() noexcept { currentPlayerSeat_.reset(); }
     std::optional<int> currentPlayerSeat() const noexcept { return currentPlayerSeat_; }
 
     /// Next/previous seat (wrapping) after/before `fromSeat` occupied by a
@@ -91,6 +108,9 @@ public:
 
     Deck& deck() noexcept { return deck_; }
     const std::vector<Card>& communityCards() const noexcept { return communityCards_; }
+    /// Cards burned (dealt face down, out of play) this hand, one before
+    /// each of the flop, turn, and river.
+    const std::vector<Card>& burnedCards() const noexcept { return burnedCards_; }
     Street street() const noexcept { return street_; }
 
     std::optional<int> buttonSeat() const noexcept { return buttonSeat_; }
@@ -114,11 +134,15 @@ private:
     /// hand at the table before any button has been set. 0 if none.
     int firstActiveSeat() const;
 
+    /// Moves the top card of the deck to the burn pile (no-op if empty).
+    void burnCard();
+
     int numSeats_;
     std::vector<std::optional<Player>> players_;
     std::vector<SeatMarkers> markers_;
     Deck deck_;
     std::vector<Card> communityCards_;
+    std::vector<Card> burnedCards_;
     Street street_ = Street::PreFlop;
     std::optional<int> currentPlayerSeat_;
     int totalPot_ = 0;

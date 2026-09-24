@@ -160,6 +160,8 @@ TEST_F(BettingRoundTest, IncompleteAllInRaiseCapsAlreadyActedSeats) {
 
     EXPECT_EQ(round.highestBet(), 40);
     EXPECT_EQ(round.minRaiseAmount(), 20);  // unchanged - incomplete raise doesn't update it
+    EXPECT_TRUE(round.isCapped(0));
+    EXPECT_FALSE(round.isCapped(2));
     EXPECT_THROW(round.processAction(Action(ActionType::Raise, 0, 50)), std::invalid_argument);
     EXPECT_NO_THROW(round.processAction(Action(ActionType::Call, 0, 0)));
 }

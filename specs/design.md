@@ -17,11 +17,11 @@ This is not quite MVC anymore: there is no single "Controller" shared across lan
 - `Deck`: generates, shuffles, and deals a 52-card deck. (Implemented — see `engine/include/poker/deck.hpp`.)
 - `HandEvaluator`: computes Texas Hold'em hand strength and rank ordering from seven cards. (Implemented — see `engine/include/poker/hand_evaluator.hpp`.)
 - `Player`: seat ownership, stack size, hole cards, and status (active / folded / all-in / out). A single concrete class — there is no `HumanPlayer`/`AIPlayer` split in the engine, because the engine doesn't care who's deciding; that distinction exists only in the Python orchestration layer. (Implemented — see `engine/include/poker/player.hpp`.)
-- `Table`: holds players, dealer position, blinds, community cards, and pot state. (Implemented — see `engine/include/poker/table.hpp`.)
+- `Table`: holds players, dealer position, blinds, community cards, burned cards (one burned before each of the flop, turn, and river), and pot state. (Implemented — see `engine/include/poker/table.hpp`.)
 - `BettingRound`: manages action order, permissible actions, and current bets for one street. (Implemented — see `engine/include/poker/betting_round.hpp`.)
 - `PotManager`: tracks the main pot and side pots. (Implemented — see `engine/include/poker/pot_manager.hpp`.)
 - `Showdown`: resolves hand comparisons and pot distribution, including ties and split pots. (Implemented — see `engine/include/poker/showdown.hpp`.)
-- `GameController`: orchestrates a hand — dealing, blind posting, round transitions, showdown — and exposes both a fully-automatic `advance()` and a single-step `stepOnce()`, since a caller (an AI loop, tests, a future frontend) needs to pace turns one at a time rather than jump straight to the final state. (Not yet implemented — Phase 3.)
+- `GameController`: owns the `Table` and orchestrates hands — button rotation, blind posting, dealing, one `BettingRound` per street, all-in runouts, showdown. The caller submits each action for `currentSeat()`; the controller checks turn order and `legalActions()` before applying it. Transitions that need no decision (closing a street, dealing the next, resolving the hand) either run immediately (`ProgressionMode::Auto`) or wait for `stepOnce()`/`advance()` (`ProgressionMode::SingleStep`), so a caller (an AI loop, tests, a future frontend) can pace them. `phase()` says which of those it's waiting on. `startHand()` optionally takes cards to deal first, for scripted hands. (Implemented — see `engine/include/poker/game_controller.hpp`.)
 
 Each class lives as a `<name>.hpp` / `<name>.cpp` pair under `engine/include/poker/` and `engine/src/`, with a matching `engine/tests/test_<name>.cpp`.
 
@@ -54,6 +54,7 @@ Not designed yet. When it's picked up, it gets its own design pass against whate
 ## Game Flow
 1. A driver (currently: none yet — a test harness or a future CLI/frontend) constructs a `Table` with seats and blinds via the bindings (or, for engine-only tests, directly in C++).
 2. At each hand, `GameController`:
+   - Rotates the dealer button (skipping busted seats).
    - Shuffles the deck and deals hole cards.
    - Posts blinds and sets active players.
    - Runs the pre-flop betting round.
@@ -61,7 +62,6 @@ Not designed yet. When it's picked up, it gets its own design pass against whate
    - Deals the turn, runs the turn betting round.
    - Deals the river, runs the river betting round.
    - Resolves the showdown and distributes pots.
-   - Rotates the dealer button.
 3. For each seat's turn, the driver asks the controller for legal actions; a human-input handler or an `RLAgent.choose_action()` call decides which one to submit.
 4. AI training updates happen in the Python `OnlineTrainer`, fed by hand outcomes read back through the bindings after each hand completes.
 

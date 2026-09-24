@@ -35,6 +35,20 @@ void Deck::seed(unsigned int value) {
     rng_.seed(value);
 }
 
+void Deck::putOnTop(const std::vector<Card>& cards) {
+    std::vector<Card> rest = cards_;
+    for (const Card& card : cards) {
+        auto it = std::find(rest.begin(), rest.end(), card);
+        if (it == rest.end()) {
+            throw std::invalid_argument("Card is not in the deck (or is listed twice).");
+        }
+        rest.erase(it);
+    }
+    // Dealing pops from the back, so the first card to deal goes last.
+    rest.insert(rest.end(), cards.rbegin(), cards.rend());
+    cards_ = std::move(rest);
+}
+
 Card Deck::dealCard() {
     if (cards_.empty()) {
         throw std::out_of_range("Cannot deal from an empty deck.");

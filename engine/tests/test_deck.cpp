@@ -82,6 +82,35 @@ TEST(Deck, SameSeedProducesSameShuffleOrder) {
     EXPECT_TRUE(std::equal(a.begin(), a.end(), b.begin(), b.end()));
 }
 
+TEST(Deck, PutOnTopDealsGivenCardsFirstInOrder) {
+    Deck deck;
+    deck.seed(3);
+    deck.shuffle();
+    std::vector<Card> top = {Card(Suit::Spades, Rank::Ace), Card(Suit::Hearts, Rank::Two),
+                             Card(Suit::Clubs, Rank::Ten)};
+
+    deck.putOnTop(top);
+
+    EXPECT_EQ(deck.remaining(), Deck::kFullDeckSize);
+    EXPECT_EQ(deck.dealCard(), top[0]);
+    EXPECT_EQ(deck.dealCard(), top[1]);
+    EXPECT_EQ(deck.dealCard(), top[2]);
+    std::unordered_set<Card> unique(deck.begin(), deck.end());
+    EXPECT_EQ(unique.size(), Deck::kFullDeckSize - 3);
+}
+
+TEST(Deck, PutOnTopRejectsDuplicateOrMissingCardsWithoutChangingDeck) {
+    Deck deck;
+    std::vector<Card> before(deck.begin(), deck.end());
+    Card ace(Suit::Spades, Rank::Ace);
+
+    EXPECT_THROW(deck.putOnTop({ace, ace}), std::invalid_argument);
+    EXPECT_TRUE(std::equal(deck.begin(), deck.end(), before.begin(), before.end()));
+
+    deck.dealCard();  // the ace of spades is last in canonical order
+    EXPECT_THROW(deck.putOnTop({ace}), std::invalid_argument);
+}
+
 TEST(Deck, ShuffleChangesCardOrder) {
     Deck a;
     a.seed(1);

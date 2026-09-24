@@ -92,6 +92,7 @@ void Table::resetForNewHand() {
     }
     deck_.reset();
     communityCards_.clear();
+    burnedCards_.clear();
     street_ = Street::PreFlop;
     currentPlayerSeat_.reset();
     totalPot_ = 0;
@@ -172,18 +173,27 @@ std::vector<Card> Table::dealCommunityCards(int numCards) {
     return dealt;
 }
 
+void Table::burnCard() {
+    if (!deck_.isEmpty()) {
+        burnedCards_.push_back(deck_.dealCard());
+    }
+}
+
 Street Table::advanceStreet() {
     switch (street_) {
         case Street::PreFlop:
             street_ = Street::Flop;
+            burnCard();
             dealCommunityCards(3);
             break;
         case Street::Flop:
             street_ = Street::Turn;
+            burnCard();
             dealCommunityCards(1);
             break;
         case Street::Turn:
             street_ = Street::River;
+            burnCard();
             dealCommunityCards(1);
             break;
         case Street::River:
