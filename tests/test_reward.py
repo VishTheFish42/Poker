@@ -1,112 +1,104 @@
-"""Unit tests for RL reward logic (Task 5.3), using real engine objects
-(Player, Showdown, HandEvaluator) rather than mocks so the computed
-rewards are checked against actual engine outcomes.
+"""Unit tests for RL reward logic (Task 5.3), using results from real hands
+played on the C++ engine rather than mocks, so the computed rewards are
+checked against actual engine outcomes.
 """
 
 import pytest
 
+from poker_engine import ActionType
 from src.poker.ai.reward import (
     BUST_PENALTY,
     RewardCalculator,
     STRONG_FOLD_PENALTY,
     WEAK_SHOWDOWN_LOSS_PENALTY,
+    WEAK_SHOWDOWN_THRESHOLD,
     WIN_BONUS,
 )
-from src.poker.engine.card import Card, CardRank as R, CardSuit as S
-from src.poker.engine.player import Player
-from src.poker.engine.pot_manager import PotManager
-from src.poker.engine.showdown import Showdown
+from tests.engine_helpers import act, cards, check_down, make_controller
 
-BOARD = [
-    Card(S.CLUBS, R.TWO),
-    Card(S.HEARTS, R.SEVEN),
-    Card(S.DIAMONDS, R.QUEEN),
-    Card(S.SPADES, R.KING),
-    Card(S.HEARTS, R.ACE),
-]
+BOARD = "2c 7h Qd Ks Ah"
+BIG_BLIND = 10
 
 
-def make_player(seat: int, name: str, hole, stack: int = 1000) -> Player:
-    p = Player(name, seat, stack)
-    p.hole_cards = hole
-    return p
+def showdown(alice_hole, bob_hole, seat):
+    """Heads-up hand (Alice seat 0, Bob seat 1, blinds 5/10) checked down
+    on BOARD. Returns (seat's PlayerResult, is_showdown, its contribution,
+    its stack afterwards)."""
+    flop, turn, river = BOARD.split()[:3], BOARD.split()[3], BOARD.split()[4]
+    deal = f"{alice_hole} {bob_hole} 8d {' '.join(flop)} 8h {turn} 8c {river}"
+    gc = make_controller(num_players=2, sb=5, bb=BIG_BLIND, stacked_cards=cards(deal))
+    check_down(gc)
+    return _outcome(gc, seat)
 
 
-def result_for(seat: int, players, board, contributions):
-    pm = PotManager()
-    pm.calculate_pots(contributions)
-    result = Showdown.resolve(players, board, pm)
-    return next(r for r in result.player_results if r.seat == seat), result.is_showdown
+def _outcome(gc, seat):
+    result = gc.last_result
+    player_result = next(r for r in result.player_results if r.seat == seat)
+    return player_result, result.is_showdown, gc.contributions[seat], gc.table.get_player(seat).stack
 
 
 class TestForResultWinner:
     def test_winner_reward_includes_net_chips_and_win_bonus(self):
-        alice = make_player(0, "Alice", [Card(S.SPADES, R.ACE), Card(S.DIAMONDS, R.ACE)])
-        bob = make_player(1, "Bob", [Card(S.HEARTS, R.TWO), Card(S.DIAMONDS, R.THREE)])
-        result, is_showdown = result_for(0, [alice, bob], BOARD, {0: 100, 1: 100})
+        result, is_showdown, contribution, stack = showdown("As Ad", "2h 3d", seat=0)
+        assert is_showdown and result.chips_won == 20
 
         reward = RewardCalculator.for_result(
-            result, contribution=100, stack_after=alice.stack, big_blind=10, is_showdown=is_showdown
+            result, contribution=contribution, stack_after=stack, big_blind=BIG_BLIND, is_showdown=is_showdown
         )
 
-        net = (result.chips_won - 100) / 10
+        net = (result.chips_won - contribution) / BIG_BLIND
         assert reward == pytest.approx(net + WIN_BONUS)
 
     def test_uncontested_win_gets_bonus_too(self):
-        alice = make_player(0, "Alice", [Card(S.SPADES, R.TWO), Card(S.DIAMONDS, R.THREE)])
-        result, is_showdown = result_for(0, [alice], [], {0: 100, 1: 100})
+        gc = make_controller(num_players=2, sb=5, bb=BIG_BLIND)
+        act(gc, ActionType.FOLD)  # button/SB folds, BB wins uncontested
+        result, is_showdown, contribution, stack = _outcome(gc, seat=1)
         assert not is_showdown
 
         reward = RewardCalculator.for_result(
-            result, contribution=100, stack_after=alice.stack, big_blind=10, is_showdown=is_showdown
+            result, contribution=contribution, stack_after=stack, big_blind=BIG_BLIND, is_showdown=is_showdown
         )
 
-        net = (result.chips_won - 100) / 10
+        net = (result.chips_won - contribution) / BIG_BLIND
         assert reward == pytest.approx(net + WIN_BONUS)
 
 
 class TestForResultLoser:
     def test_losing_with_high_card_only_applies_weak_showdown_penalty(self):
-        alice = make_player(0, "Alice", [Card(S.SPADES, R.ACE), Card(S.DIAMONDS, R.ACE)])
         # Bob's hole cards don't pair or improve the board - his best hand off
         # this board is exactly high-card-ace (using the board's own ace).
-        bob = make_player(1, "Bob", [Card(S.CLUBS, R.FOUR), Card(S.SPADES, R.NINE)])
-        result, is_showdown = result_for(1, [alice, bob], BOARD, {0: 100, 1: 100})
+        result, is_showdown, contribution, stack = showdown("As Ad", "4c 9s", seat=1)
         assert is_showdown
+        assert result.best_hand.hand_type < WEAK_SHOWDOWN_THRESHOLD
 
-        bob_result = result
         reward = RewardCalculator.for_result(
-            bob_result, contribution=100, stack_after=bob.stack, big_blind=10, is_showdown=is_showdown
+            result, contribution=contribution, stack_after=stack, big_blind=BIG_BLIND, is_showdown=is_showdown
         )
 
-        net = (bob_result.chips_won - 100) / 10
-        assert bob_result.chips_won == 0
-        assert reward == pytest.approx(net + WEAK_SHOWDOWN_LOSS_PENALTY)
+        assert result.chips_won == 0
+        assert reward == pytest.approx(-contribution / BIG_BLIND + WEAK_SHOWDOWN_LOSS_PENALTY)
 
     def test_losing_with_a_decent_hand_gets_no_weak_penalty(self):
-        alice = make_player(0, "Alice", [Card(S.SPADES, R.ACE), Card(S.DIAMONDS, R.ACE)])
         # Bob makes two pair (kings and queens using the board) - not "weak".
-        bob = make_player(1, "Bob", [Card(S.CLUBS, R.KING), Card(S.SPADES, R.QUEEN)])
-        result, is_showdown = result_for(1, [alice, bob], BOARD, {0: 100, 1: 100})
+        result, is_showdown, contribution, stack = showdown("As Ad", "Kc Qs", seat=1)
 
         reward = RewardCalculator.for_result(
-            result, contribution=100, stack_after=bob.stack, big_blind=10, is_showdown=is_showdown
+            result, contribution=contribution, stack_after=stack, big_blind=BIG_BLIND, is_showdown=is_showdown
         )
 
-        net = (result.chips_won - 100) / 10
-        assert reward == pytest.approx(net)
+        assert result.chips_won == 0
+        assert reward == pytest.approx(-contribution / BIG_BLIND)
 
     def test_bust_applies_penalty(self):
-        alice = make_player(0, "Alice", [Card(S.SPADES, R.ACE), Card(S.DIAMONDS, R.ACE)])
-        bob = make_player(1, "Bob", [Card(S.CLUBS, R.FOUR), Card(S.SPADES, R.NINE)], stack=0)
-        result, is_showdown = result_for(1, [alice, bob], BOARD, {0: 100, 1: 100})
+        result, is_showdown, contribution, _ = showdown("As Ad", "4c 9s", seat=1)
 
         reward = RewardCalculator.for_result(
-            result, contribution=100, stack_after=0, big_blind=10, is_showdown=is_showdown
+            result, contribution=contribution, stack_after=0, big_blind=BIG_BLIND, is_showdown=is_showdown
         )
 
-        net = (result.chips_won - 100) / 10
-        assert reward == pytest.approx(net + WEAK_SHOWDOWN_LOSS_PENALTY + BUST_PENALTY)
+        assert reward == pytest.approx(
+            -contribution / BIG_BLIND + WEAK_SHOWDOWN_LOSS_PENALTY + BUST_PENALTY
+        )
 
 
 class TestForFold:
@@ -119,8 +111,8 @@ class TestForFold:
         assert reward == pytest.approx(-100.0 + BUST_PENALTY)
 
     def test_folding_a_strong_five_card_hand_is_penalized(self):
-        hole = [Card(S.CLUBS, R.KING), Card(S.SPADES, R.KING)]
-        board = [Card(S.HEARTS, R.QUEEN), Card(S.DIAMONDS, R.QUEEN), Card(S.CLUBS, R.TWO)]
+        hole = cards("Kc Ks")
+        board = cards("Qh Qd 2c")
 
         reward = RewardCalculator.for_fold(
             contribution=20, stack_after=980, big_blind=10, hole_cards=hole, community_cards=board
@@ -129,8 +121,8 @@ class TestForFold:
         assert reward == pytest.approx(-2.0 + STRONG_FOLD_PENALTY)
 
     def test_folding_a_weak_five_card_hand_is_not_penalized(self):
-        hole = [Card(S.CLUBS, R.TWO), Card(S.SPADES, R.SEVEN)]
-        board = [Card(S.HEARTS, R.NINE), Card(S.DIAMONDS, R.JACK), Card(S.CLUBS, R.FOUR)]
+        hole = cards("2c 7s")
+        board = cards("9h Jd 4c")
 
         reward = RewardCalculator.for_fold(
             contribution=20, stack_after=980, big_blind=10, hole_cards=hole, community_cards=board
@@ -139,7 +131,7 @@ class TestForFold:
         assert reward == pytest.approx(-2.0)
 
     def test_preflop_fold_has_no_strength_penalty(self):
-        hole = [Card(S.CLUBS, R.KING), Card(S.SPADES, R.KING)]  # pocket kings, but unscoreable preflop
+        hole = cards("Kc Ks")  # pocket kings, but unscoreable preflop
 
         reward = RewardCalculator.for_fold(
             contribution=10, stack_after=990, big_blind=10, hole_cards=hole, community_cards=[]
@@ -150,20 +142,20 @@ class TestForFold:
 
 class TestFoldStrengthPenalty:
     def test_two_pair_is_strong(self):
-        hole = [Card(S.CLUBS, R.KING), Card(S.SPADES, R.KING)]
-        board = [Card(S.HEARTS, R.QUEEN), Card(S.DIAMONDS, R.QUEEN), Card(S.CLUBS, R.TWO)]
+        hole = cards("Kc Ks")
+        board = cards("Qh Qd 2c")
         assert RewardCalculator.fold_strength_penalty(hole, board) == STRONG_FOLD_PENALTY
 
     def test_high_card_is_not_strong(self):
-        hole = [Card(S.CLUBS, R.TWO), Card(S.SPADES, R.SEVEN)]
-        board = [Card(S.HEARTS, R.NINE), Card(S.DIAMONDS, R.JACK), Card(S.CLUBS, R.FOUR)]
+        hole = cards("2c 7s")
+        board = cards("9h Jd 4c")
         assert RewardCalculator.fold_strength_penalty(hole, board) == 0.0
 
     def test_wrong_card_count_returns_zero(self):
-        hole = [Card(S.CLUBS, R.KING), Card(S.SPADES, R.KING)]
+        hole = cards("Kc Ks")
         assert RewardCalculator.fold_strength_penalty(hole, []) == 0.0  # preflop: 2 cards
-        assert RewardCalculator.fold_strength_penalty(hole, BOARD[:4]) == 0.0  # turn: 6 cards
-        assert RewardCalculator.fold_strength_penalty(hole, BOARD) == 0.0  # river: 7 cards
+        assert RewardCalculator.fold_strength_penalty(hole, cards(BOARD)[:4]) == 0.0  # turn: 6 cards
+        assert RewardCalculator.fold_strength_penalty(hole, cards(BOARD)) == 0.0  # river: 7 cards
 
     def test_none_inputs_return_zero(self):
         assert RewardCalculator.fold_strength_penalty(None, None) == 0.0

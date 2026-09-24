@@ -68,9 +68,9 @@ pip install -r requirements-dev.txt
 ### Run Tests
 Build the bindings first (Part 1, "Optional: Python Bindings"), then:
 ```bash
-pytest tests/test_bindings.py
+pytest
 ```
-Note: `src/poker/ai/` still imports the old Python engine (`poker.engine`), so the rest of `tests/` fails at import until `specs/tasks.md` Phase 5.7 rewires it onto `poker_engine`. Plain `pytest tests/` stops at those collection errors until then.
+This runs the bindings tests and the AI layer's tests, all against the real engine, with a coverage report for `src/poker/ai/` (configured in `pyproject.toml`).
 
 ### Code Formatting and Linting
 ```bash
@@ -122,7 +122,6 @@ Install it locally first (`brew install googletest` on macOS, or your distro's p
 
 ### Python Import Errors in `src/poker/ai/`
 - `No module named 'poker_engine'`: the bindings aren't built, or were built somewhere other than `build/`. Build with `-DPOKER_BUILD_PYTHON_BINDINGS=ON` or set `POKER_ENGINE_BUILD_DIR`.
-- `No module named 'src.poker.engine'`: expected until `specs/tasks.md` Phase 5.7 (rewiring the AI layer onto `poker_engine`) is done — see the note under "Run Tests" above.
 - The module imports in one Python but not another: it's compiled for one interpreter version. Rebuild with `-DPython_EXECUTABLE` pointing at the Python you run.
 
 ## IDE Setup

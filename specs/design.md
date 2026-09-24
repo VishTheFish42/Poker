@@ -54,16 +54,17 @@ Ownership rules, which keep Python from ever holding a dangling C++ pointer:
 - Table's per-hand mutators (dealing, blinds, advancing streets, pot updates) and `Player`'s chip/status mutators are not bound: only `GameController` drives a hand.
 
 ### `ai/` (Python, under `src/poker/ai/`)
-- `RLAgent`: encapsulates the policy network and training loop.
+- `RLAgent`: encapsulates the policy network and training loop. `select_action(controller, seat)` decides for the seat on the clock of a bound `GameController`.
 - `PolicyNetwork`: neural model mapping observations to action probabilities (PyTorch).
 - `ReplayBuffer`: stores experience tuples for policy updates.
 - `ActionSpace`: defines fold, call/check, and raise/bet choices.
 - `ObservationEncoder`: converts engine state (read through the bindings) into numeric features.
 - `RewardCalculator`: computes reward signals from hand outcomes.
 - `OnlineTrainer`: runs policy updates between hands during live play.
-- `difficulty`: novice/advanced presets and checkpoint loading.
+- `difficulty`: the `Difficulty` tiers (novice/intermediate/advanced, an AI-only concept the engine doesn't know about), their sampling temperatures, and checkpoint loading.
+- `runner`: the orchestration the engine deliberately leaves to its caller. `run_ai_turns(controller, agents)` takes `{seat: RLAgent}` and, whenever an AI seat is on the clock, submits that agent's action (running any pending single-step transitions in between). It returns the seat when one without an agent (e.g. a human) must act, so the caller can submit that action and resume. `play_hand(controller, agents, stacked_cards=())` starts a hand and plays it to completion with every seat AI-controlled.
 
-These modules still import the old Python engine (`poker.engine.*`), which no longer exists, so they don't import at the moment. Rewiring them onto the `poker_engine` module above is tracked as its own task in `tasks.md` (5.7), not assumed to be automatic.
+These modules use the engine only through `poker_engine`. Nothing in the AI layer re-implements a rule: legality comes from `GameController.legal_actions()`, and every action goes through `submit_action()`.
 
 ### Frontend (deferred)
 Not designed yet. When it's picked up, it gets its own design pass against whatever the engine's and bindings' real, by-then-stable API looks like — not against this document's guesses.
@@ -75,7 +76,7 @@ Not designed yet. When it's picked up, it gets its own design pass against whate
 - Nothing in `engine/` or `bindings/` references `ai/` or a frontend. Dependencies point one direction: frontend → bindings → engine, and ai → bindings → engine.
 
 ## Game Flow
-1. A driver (currently: none yet — a test harness or a future CLI/frontend) constructs a `Table` with seats and blinds via the bindings (or, for engine-only tests, directly in C++).
+1. A driver (today `poker.ai.runner` or a test; later a frontend) constructs a `Table` with seats via the bindings, then a `GameController` with the blinds (or, for engine-only tests, does the same directly in C++).
 2. At each hand, `GameController`:
    - Rotates the dealer button (skipping busted seats).
    - Shuffles the deck and deals hole cards.
@@ -85,7 +86,7 @@ Not designed yet. When it's picked up, it gets its own design pass against whate
    - Deals the turn, runs the turn betting round.
    - Deals the river, runs the river betting round.
    - Resolves the showdown and distributes pots.
-3. For each seat's turn, the driver asks the controller for legal actions; a human-input handler or an `RLAgent.choose_action()` call decides which one to submit.
+3. For each seat's turn, the driver asks the controller for legal actions; a human-input handler or an `RLAgent.select_action()` call decides which one to submit (`poker.ai.runner` does this for AI seats).
 4. AI training updates happen in the Python `OnlineTrainer`, fed by hand outcomes read back through the bindings after each hand completes.
 
 ## RL Agent Design

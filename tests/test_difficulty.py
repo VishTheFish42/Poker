@@ -5,13 +5,13 @@ import pytest
 
 from src.poker.ai.difficulty import (
     DIFFICULTY_TEMPERATURES,
+    Difficulty,
     build_agent,
     checkpoint_path,
     save_agent,
 )
 from src.poker.ai.replay_buffer import ReplayBuffer
 from src.poker.ai.rl_agent import RLAgent
-from src.poker.engine.player import Difficulty
 
 
 class TestCheckpointPath:

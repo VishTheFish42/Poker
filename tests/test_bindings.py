@@ -116,6 +116,12 @@ class TestHandEvaluator:
         assert len(pair.cards) == 5
         assert royal > pair
 
+    def test_rank_and_hand_type_are_ordered(self):
+        assert Rank.TWO < Rank.ACE
+        assert int(Rank.ACE) == 14
+        assert pe.HandType.TWO_PAIR >= pe.HandType.ONE_PAIR
+        assert pe.HandType.HIGH_CARD < pe.HandType.ROYAL_FLUSH
+
     def test_wrong_card_count_raises_value_error(self):
         with pytest.raises(ValueError):
             pe.HandEvaluator.evaluate_hand(cards("As Ks"))

@@ -1,37 +1,30 @@
-"""Unit and integration tests for RLAgent (Task 5.2), using a real
-GameController/AIPlayer (not mocks) so every produced action is checked
-against the engine's own legality rules.
+"""Unit and integration tests for RLAgent (Task 5.2), using the real C++
+engine (not mocks) so every produced action is checked against the
+engine's own legality rules.
 """
 
 import pytest
 import torch
 
+from poker_engine import ActionType
 from src.poker.ai.action_space import AIAction
 from src.poker.ai.replay_buffer import ReplayBuffer
 from src.poker.ai.rl_agent import RLAgent
-from src.poker.engine.card import Card, CardRank as R, CardSuit as S
-from src.poker.engine.controller import GameController
-from src.poker.engine.player import AIPlayer, Player
-from src.poker.engine.table import Table
-
-
-def make_controller(num_players=3, stack=1000, sb=1, bb=2):
-    table = Table(num_players)
-    for seat in range(num_players):
-        table.add_player(Player(f"P{seat}", seat, stack))
-    gc = GameController(table, sb, bb)
-    gc.start_new_hand()
-    return gc
+from src.poker.ai.runner import play_hand
+from tests.engine_helpers import act, cards, check_or_call, make_controller
 
 
 def make_ai_controller(num_players=3, stack=1000, sb=1, bb=2, agent_factory=None):
+    """A controller (no hand started) plus `{seat: agent}` for every seat."""
     agent_factory = agent_factory or (lambda: RLAgent(deterministic=True))
-    table = Table(num_players)
-    for seat in range(num_players):
-        player = AIPlayer(f"AI{seat}", seat, stack)
-        player.set_agent(agent_factory())
-        table.add_player(player)
-    return GameController(table, sb, bb)
+    gc = make_controller(num_players=num_players, stack=stack, sb=sb, bb=bb, start=False)
+    return gc, {seat: agent_factory() for seat in range(num_players)}
+
+
+def force(agent, ai_action):
+    """Make `agent` always pick `ai_action`, keeping the real log-prob/entropy."""
+    original_choose = agent._choose
+    agent._choose = lambda logits, mask: (ai_action,) + original_choose(logits, mask)[1:]
 
 
 class TestConstruction:
@@ -50,63 +43,62 @@ class TestConstruction:
 class TestSelectActionLegality:
     def test_returned_action_is_always_legal(self):
         gc = make_controller(num_players=2, sb=1, bb=2)
-        player = gc.get_current_player()
         agent = RLAgent()
 
         for _ in range(20):
-            action = agent.select_action(gc._build_game_state_view(), player)
+            action = agent.select_action(gc, gc.current_seat)
             assert gc.validate_action(action) is None
 
     def test_masking_respected_when_only_passive_actions_are_legal(self):
         gc = make_controller(num_players=2, stack=1000, sb=1, bb=2)
-        gc.go_all_in()  # seat 0 shoves; seat 1 can only fold/call-all-in, never bet/raise
-        player = gc.get_current_player()
+        act(gc, ActionType.ALL_IN)  # seat 0 shoves; seat 1 can only fold or call, never bet/raise
         agent = RLAgent()
 
         for _ in range(20):
-            action = agent.select_action(gc._build_game_state_view(), player)
+            action = agent.select_action(gc, gc.current_seat)
             assert gc.validate_action(action) is None
-            assert action.action_type.value not in ("bet", "raise")
+            assert action.action_type not in (ActionType.BET, ActionType.RAISE)
 
     def test_legal_action_on_the_flop_with_no_bet_yet(self):
         gc = make_controller(num_players=2, sb=1, bb=2)
-        gc.check_or_call()
-        gc.check_or_call()  # flop, no bet yet
-        player = gc.get_current_player()
+        check_or_call(gc)
+        check_or_call(gc)  # flop, no bet yet
         agent = RLAgent()
 
-        action = agent.select_action(gc._build_game_state_view(), player)
+        action = agent.select_action(gc, gc.current_seat)
         assert gc.validate_action(action) is None
+
+    def test_rejects_a_seat_that_is_not_on_the_clock(self):
+        gc = make_controller(num_players=2)
+        with pytest.raises(ValueError):
+            RLAgent().select_action(gc, 1 - gc.current_seat)
 
 
 class TestDeterministicMode:
     def test_same_state_yields_the_same_action_repeatedly(self):
         gc = make_controller(num_players=2, sb=1, bb=2)
-        player = gc.get_current_player()
         agent = RLAgent(deterministic=True)
-        game_state = gc._build_game_state_view()
 
-        first = agent.select_action(game_state, player)
-        second = agent.select_action(game_state, player)
+        first = agent.select_action(gc, gc.current_seat)
+        second = agent.select_action(gc, gc.current_seat)
 
-        assert first.action_type == second.action_type
-        assert first.amount == second.amount
+        assert first == second
 
 
 class TestFullHandIntegration:
     def test_all_ai_hand_plays_to_completion(self):
-        gc = make_ai_controller(num_players=3, sb=1, bb=2)
-        gc.start_new_hand()  # auto_advance() runs the whole hand: every seat has an agent
+        gc, agents = make_ai_controller(num_players=3, sb=1, bb=2)
+        play_hand(gc, agents)
         assert gc.is_hand_complete
 
     def test_no_exceptions_across_several_hands(self):
-        gc = make_ai_controller(
+        gc, agents = make_ai_controller(
             num_players=3, stack=200, sb=5, bb=10, agent_factory=lambda: RLAgent(temperature=1.5)
         )
         for _ in range(5):
-            if any(p.stack <= 0 for p in gc.table.get_all_players()):
+            if sum(p.has_chips for p in gc.table.get_all_players()) < 2:
                 break
-            gc.start_new_hand()  # start_new_hand() rotates the button itself
+            play_hand(gc, agents)  # start_hand() rotates the button itself
             assert gc.is_hand_complete
 
 
@@ -125,21 +117,19 @@ class TestTrainingEnabled:
 class TestRecordsExperienceWhileTraining:
     def test_select_action_records_a_pending_experience(self):
         gc = make_controller(num_players=2, sb=1, bb=2)
-        player = gc.get_current_player()
         buffer = ReplayBuffer()
         agent = RLAgent(replay_buffer=buffer)
 
-        agent.select_action(gc._build_game_state_view(), player)
+        agent.select_action(gc, gc.current_seat)
 
         assert len(agent._pending) == 1
         assert len(buffer) == 0  # not pushed into the buffer until finish_hand()
 
     def test_no_recording_when_not_training(self):
         gc = make_controller(num_players=2, sb=1, bb=2)
-        player = gc.get_current_player()
         agent = RLAgent()
 
-        agent.select_action(gc._build_game_state_view(), player)
+        agent.select_action(gc, gc.current_seat)
 
         assert agent._pending == []
 
@@ -147,11 +137,10 @@ class TestRecordsExperienceWhileTraining:
 class TestFinishHand:
     def test_pushes_one_experience_per_pending_action(self):
         gc = make_controller(num_players=2, sb=1, bb=2)
-        player = gc.get_current_player()
         buffer = ReplayBuffer()
         agent = RLAgent(replay_buffer=buffer)
-        agent.select_action(gc._build_game_state_view(), player)
-        agent.select_action(gc._build_game_state_view(), player)
+        agent.select_action(gc, gc.current_seat)
+        agent.select_action(gc, gc.current_seat)
 
         agent.finish_hand(base_reward=1.5)
 
@@ -160,47 +149,39 @@ class TestFinishHand:
 
     def test_experience_reward_matches_base_reward_for_non_fold_action(self):
         gc = make_controller(num_players=2, sb=1, bb=2)
-        gc.check_or_call()
-        gc.check_or_call()  # flop, no bet yet
-        player = gc.get_current_player()
+        check_or_call(gc)
+        check_or_call(gc)  # flop, no bet yet
         buffer = ReplayBuffer()
         agent = RLAgent(replay_buffer=buffer)
         # Force a non-FOLD decision so the reward can't include any
         # fold-strength shaping, regardless of what the untrained network prefers.
-        original_choose = agent._choose
-        agent._choose = lambda logits, mask: (
-            (AIAction.CHECK_CALL,) + original_choose(logits, mask)[1:]
-        )
+        force(agent, AIAction.CHECK_CALL)
 
-        agent.select_action(gc._build_game_state_view(), player)
+        agent.select_action(gc, gc.current_seat)
         agent.finish_hand(base_reward=2.0)
         experiences = buffer.drain()
 
         assert experiences[0].reward == pytest.approx(2.0)
 
     def test_fold_strength_penalty_is_added_for_a_folded_strong_hand(self):
-        gc = make_controller(num_players=2, stack=1000, sb=1, bb=2)
-        gc.check_or_call()
-        gc.check_or_call()  # reach the flop
-        gc.table.community_cards = [Card(S.HEARTS, R.QUEEN), Card(S.DIAMONDS, R.QUEEN), Card(S.CLUBS, R.TWO)]
-        player = gc.get_current_player()
-        player.hole_cards = [Card(S.CLUBS, R.KING), Card(S.SPADES, R.KING)]  # two pair with the board
+        # Seat 1 holds Kc Ks; the flop Qh Qd 2c gives it two pair, and it
+        # acts first after the flop heads-up.
+        gc = make_controller(num_players=2, sb=1, bb=2, stacked_cards=cards("3h 4d Kc Ks 8d Qh Qd 2c"))
+        check_or_call(gc)
+        check_or_call(gc)  # reach the flop
+        assert gc.current_seat == 1
 
         buffer = ReplayBuffer()
         agent = RLAgent(replay_buffer=buffer)
-        # Force a FOLD decision to exercise the fold-strength path deterministically.
-        original_choose = agent._choose
-        agent._choose = lambda logits, mask: (AIAction.FOLD,) + original_choose(logits, mask)[1:]
+        force(agent, AIAction.FOLD)  # exercise the fold-strength path deterministically
 
-        agent.select_action(gc._build_game_state_view(), player)
+        agent.select_action(gc, 1)
         agent.finish_hand(base_reward=-0.2)
         experiences = buffer.drain()
 
         assert experiences[0].reward < -0.2  # base reward plus a negative strength penalty
 
     def test_noop_when_not_training(self):
-        gc = make_controller(num_players=2, sb=1, bb=2)
-        player = gc.get_current_player()
         agent = RLAgent()
 
         agent.finish_hand(base_reward=1.0)  # should not raise
@@ -215,13 +196,12 @@ class TestUpdate:
 
     def test_update_changes_policy_parameters(self):
         gc = make_controller(num_players=2, sb=1, bb=2)
-        player = gc.get_current_player()
         buffer = ReplayBuffer()
         agent = RLAgent(replay_buffer=buffer)
 
         before = [p.clone() for p in agent.policy.parameters()]
         for _ in range(4):
-            agent.select_action(gc._build_game_state_view(), player)
+            agent.select_action(gc, gc.current_seat)
         agent.finish_hand(base_reward=3.0)
         loss = agent.update()
         after = list(agent.policy.parameters())
@@ -231,10 +211,9 @@ class TestUpdate:
 
     def test_update_clears_the_buffer(self):
         gc = make_controller(num_players=2, sb=1, bb=2)
-        player = gc.get_current_player()
         buffer = ReplayBuffer()
         agent = RLAgent(replay_buffer=buffer)
-        agent.select_action(gc._build_game_state_view(), player)
+        agent.select_action(gc, gc.current_seat)
         agent.finish_hand(base_reward=1.0)
 
         agent.update()
@@ -243,10 +222,9 @@ class TestUpdate:
 
     def test_policy_returns_to_eval_mode_after_update(self):
         gc = make_controller(num_players=2, sb=1, bb=2)
-        player = gc.get_current_player()
         buffer = ReplayBuffer()
         agent = RLAgent(replay_buffer=buffer)
-        agent.select_action(gc._build_game_state_view(), player)
+        agent.select_action(gc, gc.current_seat)
         agent.finish_hand(base_reward=1.0)
 
         agent.update()
@@ -257,18 +235,14 @@ class TestUpdate:
 class TestFullHandIntegrationWithTraining:
     def test_all_ai_training_hand_completes_and_can_be_finished(self):
         buffers = [ReplayBuffer() for _ in range(3)]
-        gc = make_ai_controller(
-            num_players=3,
-            sb=1,
-            bb=2,
-            agent_factory=iter([RLAgent(replay_buffer=b, deterministic=True) for b in buffers]).__next__,
-        )
-        gc.start_new_hand()
+        agent_iter = iter([RLAgent(replay_buffer=b, deterministic=True) for b in buffers])
+        gc, agents = make_ai_controller(num_players=3, sb=1, bb=2, agent_factory=lambda: next(agent_iter))
+        play_hand(gc, agents)
         assert gc.is_hand_complete
 
-        for player, buffer in zip(gc.table.get_all_players(), buffers):
-            player.ai_agent.finish_hand(base_reward=0.0)
-            player.ai_agent.update()  # should not raise even with 0 or few experiences
+        for agent in agents.values():
+            agent.finish_hand(base_reward=0.0)
+            agent.update()  # should not raise even with 0 or few experiences
 
 
 class TestSaveAndLoad:
@@ -306,11 +280,10 @@ class TestSaveAndLoad:
 
     def test_trained_weights_survive_a_round_trip(self, tmp_path):
         gc = make_controller(num_players=2, sb=1, bb=2)
-        player = gc.get_current_player()
         buffer = ReplayBuffer()
         agent = RLAgent(replay_buffer=buffer)
         for _ in range(3):
-            agent.select_action(gc._build_game_state_view(), player)
+            agent.select_action(gc, gc.current_seat)
         agent.finish_hand(base_reward=1.0)
         agent.update()  # actually changes the weights from their random init
 

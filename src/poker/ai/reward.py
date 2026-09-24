@@ -15,9 +15,7 @@ folded before that (and so never appears in `ShowdownResult` at all).
 
 from typing import List, Optional
 
-from ..engine.card import Card
-from ..engine.hand_evaluator import HandEvaluator, HandType
-from ..engine.showdown import PlayerResult
+from poker_engine import Card, HandEvaluator, HandType, PlayerResult
 
 WIN_BONUS = 0.5
 BUST_PENALTY = -1.0

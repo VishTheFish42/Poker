@@ -37,7 +37,7 @@ Phases are organized around the engine / bindings / AI / frontend split describe
 5.4 [x] Add an online training loop to update AI decisions during play.
 5.5 [x] Provide difficulty modes and policy persistence.
 5.6 [x] Test AI behavior in simulated training matches.
-5.7 [ ] Wire `src/poker/ai/*` to the pybind11-bound C++ engine (Phase 4) and re-validate 5.1-5.6 against it.
+5.7 [x] Wire `src/poker/ai/*` to the pybind11-bound C++ engine (Phase 4) and re-validate 5.1-5.6 against it. Adds `poker.ai.runner` (seat -> agent driver) and moves `Difficulty` into the AI layer; all AI tests run against the real engine.
 
 ## Phase 6: Frontend (Deferred)
 6.1 [ ] Decide the frontend approach/toolkit against the finished engine + bindings API.
@@ -52,7 +52,7 @@ Blocked on Phase 6: error handling and clean restart at the integration layer, s
 8.1 [x] GoogleTest coverage for the engine (`engine/tests/`, 12 suites / 128 tests, covering Card/Deck/HandEvaluator/Player/Table/BettingRound/PotManager/Showdown/GameController).
 8.2 [x] Full game flow tests (all betting rounds, a complete hand) in C++ (`test_game_controller.cpp`, including a randomized many-hand chip-conservation test).
 8.3 [x] Pot splitting and side-pot case coverage in C++ (`test_pot_manager.cpp`, `test_betting_round.cpp`'s incomplete-raise cases).
-8.4 [~] pytest coverage for the bindings (done, Phase 4.3) and the wired-up AI layer (Phase 5.7).
+8.4 [x] pytest coverage for the bindings (Phase 4.3) and the wired-up AI layer (Phase 5.7): 139 tests, 99% line coverage of `src/poker/ai/`.
 8.5 [ ] Manual UX tests — blocked on Phase 6.
 8.6 [ ] Document how to build the engine, run its tests, build the bindings, and run AI training.
 
@@ -70,7 +70,7 @@ Blocked on Phase 6: error handling and clean restart at the integration layer, s
 4. [x] Task 4: Implement `Player`, `Table`, `BettingRound`, `PotManager`, `Showdown`.
 5. [x] Task 5: Implement `GameController` and full-hand GoogleTest coverage.
 6. [x] Task 6: Implement the pybind11 bindings module and its pytest suite.
-7. [ ] Task 7: Wire the Python AI layer to the bound engine.
+7. [x] Task 7: Wire the Python AI layer to the bound engine.
 8. [ ] Task 8: Choose and design the frontend.
 9. [ ] Task 9: Build the frontend against the engine/bindings/AI stack.
 10. [ ] Task 10: Integration, UX polish, and final documentation.

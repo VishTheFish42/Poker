@@ -53,6 +53,8 @@ PYBIND11_MODULE(poker_engine, m) {
     m.doc() = "Texas Hold'em rules engine (C++), exposed to Python via pybind11.";
 
     // -- Enums ---------------------------------------------------------------
+    // Rank and HandType are ordered (and convertible to int), so they
+    // support <, >, etc.; the rest compare by equality only.
 
     py::enum_<Suit>(m, "Suit")
         .value("HEARTS", Suit::Hearts)
@@ -60,7 +62,7 @@ PYBIND11_MODULE(poker_engine, m) {
         .value("CLUBS", Suit::Clubs)
         .value("SPADES", Suit::Spades);
 
-    py::enum_<Rank>(m, "Rank")
+    py::enum_<Rank>(m, "Rank", py::arithmetic())
         .value("TWO", Rank::Two)
         .value("THREE", Rank::Three)
         .value("FOUR", Rank::Four)
@@ -75,7 +77,7 @@ PYBIND11_MODULE(poker_engine, m) {
         .value("KING", Rank::King)
         .value("ACE", Rank::Ace);
 
-    py::enum_<HandType>(m, "HandType")
+    py::enum_<HandType>(m, "HandType", py::arithmetic())
         .value("HIGH_CARD", HandType::HighCard)
         .value("ONE_PAIR", HandType::OnePair)
         .value("TWO_PAIR", HandType::TwoPair)

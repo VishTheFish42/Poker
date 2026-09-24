@@ -1,11 +1,11 @@
 """RL agent for computer-controlled players (Task 5.2), with online
 actor-critic training support (Task 5.4).
 
-`RLAgent` is what `AIPlayer.set_agent()` expects: an object with a
-`select_action(game_state, player)` method matching `Player.get_action()`'s
-contract. It encodes the current state via `ObservationEncoder`, runs it
-through a `PolicyNetwork`, masks out illegal actions with `ActionSpace`,
-samples one, and translates it into a real engine `Action`.
+`RLAgent.select_action(controller, seat)` decides for the seat on the
+clock of a `poker_engine.GameController`: it encodes the current state via
+`ObservationEncoder`, runs it through a `PolicyNetwork`, masks out illegal
+actions with `ActionSpace`, samples one, and translates it into a real
+engine `Action`. `poker.ai.runner` maps seats to agents and drives hands.
 
 Attaching a `ReplayBuffer` turns on training mode: `select_action()` then
 also keeps each decision's log-probability, value estimate, and entropy
@@ -28,14 +28,13 @@ checkpoint to a difficulty tier).
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 import torch
 import torch.nn.functional as F
 
-from ..engine.action import Action
-from ..engine.card import Card
-from ..engine.player import Player
+from poker_engine import Action, Card, GameController
+
 from .action_space import ActionSpace, AIAction
 from .observation import ObservationEncoder
 from .policy_network import PolicyNetwork
@@ -61,7 +60,7 @@ class _PendingExperience:
 
 
 class RLAgent:
-    """Selects actions for an `AIPlayer` using a `PolicyNetwork`, optionally
+    """Selects actions for one seat using a `PolicyNetwork`, optionally
     training it online from the outcomes of the hands it plays.
     """
 
@@ -125,22 +124,26 @@ class RLAgent:
         """Whether this agent records experiences and can be updated."""
         return self.replay_buffer is not None
 
-    def select_action(self, game_state: Dict[str, object], player: Player) -> Action:
-        """Choose and return a legal `Action` for `player`.
+    def select_action(self, controller: GameController, seat: int) -> Action:
+        """Choose and return a legal `Action` for `seat`.
 
         Args:
-            game_state: The dict from `GameController._build_game_state_view()` -
-                must include `"controller"` and `"legal_actions"`.
-            player: The `AIPlayer` on the clock.
+            controller: The live engine controller, with `seat` on the
+                clock (`controller.current_seat == seat`).
+            seat: The seat this agent is deciding for.
 
         Returns:
             A concrete `Action` ready for `GameController.submit_action()`.
-        """
-        controller = game_state["controller"]
-        legal = game_state["legal_actions"]
-        pot = game_state["pot"]
 
-        observation = ObservationEncoder.encode(controller, player.seat)
+        Raises:
+            ValueError: If `seat` isn't the seat on the clock.
+        """
+        if controller.current_seat != seat:
+            raise ValueError(f"seat {seat} is not on the clock (current seat: {controller.current_seat})")
+        legal = controller.legal_actions()
+        table = controller.table
+
+        observation = ObservationEncoder.encode(controller, seat)
         # Not torch.from_numpy(): this environment's torch predates full
         # NumPy 2.x support, and that bridge crashes outright here - going
         # through a plain Python list avoids the broken C-API path.
@@ -161,12 +164,12 @@ class RLAgent:
                     value=value.squeeze(0),
                     entropy=entropy,
                     is_fold=(ai_action is AIAction.FOLD),
-                    hole_cards=list(game_state.get("hole_cards", [])),
-                    community_cards=list(game_state.get("community_cards", [])),
+                    hole_cards=list(table.get_player(seat).hole_cards),
+                    community_cards=list(table.community_cards),
                 )
             )
 
-        return ActionSpace.to_engine_action(ai_action, player.seat, legal, pot)
+        return ActionSpace.to_engine_action(ai_action, legal, table.total_pot)
 
     def finish_hand(self, base_reward: float) -> None:
         """Attach a finished hand's terminal reward to every action this

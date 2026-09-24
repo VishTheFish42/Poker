@@ -1,6 +1,6 @@
 """Difficulty modes and policy persistence for AI opponents (Task 5.5).
 
-Maps each `poker.engine.player.Difficulty` tier to a sampling temperature
+Maps each `Difficulty` tier to a sampling temperature
 for `RLAgent`: novice explores more (a flatter, more random distribution
 over actions, so it plays looser regardless of how good its underlying
 weights are), advanced sticks close to its policy's top choice. This
@@ -14,12 +14,22 @@ otherwise - specs/design.md's Training Strategy: "Save the policy state
 after each session if feasible."
 """
 
+from enum import Enum
 from pathlib import Path
 from typing import Optional, Union
 
-from ..engine.player import Difficulty
 from .replay_buffer import ReplayBuffer
 from .rl_agent import RLAgent
+
+
+class Difficulty(Enum):
+    """How strong an AI opponent plays. An AI-layer concept only - the
+    engine doesn't know who (or what) is deciding a seat's actions."""
+
+    NOVICE = 1
+    INTERMEDIATE = 2
+    ADVANCED = 3
+
 
 DIFFICULTY_TEMPERATURES = {
     Difficulty.NOVICE: 2.0,
@@ -60,8 +70,8 @@ def build_agent(
             (see `RLAgent`).
 
     Returns:
-        A configured `RLAgent`, ready to be handed to
-        `AIPlayer.set_agent()`.
+        A configured `RLAgent`, ready to be assigned to a seat (see
+        `poker.ai.runner`).
     """
     temperature = DIFFICULTY_TEMPERATURES[difficulty]
     path = checkpoint_path(difficulty, checkpoint_dir) if checkpoint_dir is not None else None
