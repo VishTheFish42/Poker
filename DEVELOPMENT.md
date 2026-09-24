@@ -44,11 +44,12 @@ engine/
 ```
 
 ### Optional: Python Bindings
-The pybind11 bindings target is scaffolded but not implemented yet (`bindings/CMakeLists.txt`). Once there's a module to build there:
+The `poker_engine` pybind11 module (`bindings/`) is off by default. Create the virtualenv first (Part 2): CMake builds the module against `.venv`'s Python if it exists (override with `-DPython_EXECUTABLE=/path/to/python`). pybind11 is found via `find_package` if installed, otherwise fetched.
 ```bash
 cmake -S . -B build -DPOKER_BUILD_PYTHON_BINDINGS=ON
 cmake --build build -j
 ```
+The module lands in `build/bindings/` (e.g. `poker_engine.cpython-311-darwin.so`). `tests/conftest.py` adds that directory to `sys.path`; set `POKER_ENGINE_BUILD_DIR` if you build elsewhere. To use it in a script: `PYTHONPATH=build/bindings python -c "import poker_engine"`.
 
 ## Part 2: Python AI Layer
 
@@ -65,10 +66,11 @@ pip install -r requirements-dev.txt
 ```
 
 ### Run Tests
+Build the bindings first (Part 1, "Optional: Python Bindings"), then:
 ```bash
-pytest tests/
+pytest tests/test_bindings.py
 ```
-Note: `src/poker/ai/` imports `poker.engine`, provided by the pybind11 bindings (`specs/tasks.md` Phase 4/5.7). Its tests run once that module exists and the AI layer is wired to it.
+Note: `src/poker/ai/` still imports the old Python engine (`poker.engine`), so the rest of `tests/` fails at import until `specs/tasks.md` Phase 5.7 rewires it onto `poker_engine`. Plain `pytest tests/` stops at those collection errors until then.
 
 ### Code Formatting and Linting
 ```bash
@@ -83,7 +85,7 @@ mypy src/
 | Dependency | Purpose |
 |---|---|
 | GoogleTest | Engine unit tests |
-| pybind11 | Python bindings (once implemented) |
+| pybind11 | Python bindings (`poker_engine`) |
 
 ### Python Runtime (`requirements.txt`)
 | Package | Purpose |
@@ -119,7 +121,9 @@ rm -rf .venv         # Python virtual environment (safe to regenerate)
 Install it locally first (`brew install googletest` on macOS, or your distro's package), then re-run `cmake -S . -B build` — `find_package` will pick it up without needing to fetch source.
 
 ### Python Import Errors in `src/poker/ai/`
-Expected until `specs/tasks.md` Phase 5.7 (wiring the AI layer to the pybind11 bindings) is done — see the note under "Run Tests" above.
+- `No module named 'poker_engine'`: the bindings aren't built, or were built somewhere other than `build/`. Build with `-DPOKER_BUILD_PYTHON_BINDINGS=ON` or set `POKER_ENGINE_BUILD_DIR`.
+- `No module named 'src.poker.engine'`: expected until `specs/tasks.md` Phase 5.7 (rewiring the AI layer onto `poker_engine`) is done — see the note under "Run Tests" above.
+- The module imports in one Python but not another: it's compiled for one interpreter version. Rebuild with `-DPython_EXECUTABLE` pointing at the Python you run.
 
 ## IDE Setup
 

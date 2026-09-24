@@ -25,10 +25,10 @@ Phases are organized around the engine / bindings / AI / frontend split describe
 3.5 [x] Add GoogleTest coverage for a full hand played end to end, including side-pot and all-in cases.
 
 ## Phase 4: Python Bindings
-4.1 [ ] Implement the pybind11 module exposing `Card`, `Deck`, `Player`, `Table`, `GameController`, and action/result types.
-4.2 [ ] Expose the query methods the AI layer needs: legal actions, stacks, pot size, stage, dealer position.
-4.3 [ ] Write a pytest suite against the bound module (import it, play a scripted hand, assert results).
-4.4 [ ] Document the bindings' Python-facing API in `specs/design.md` once it's real.
+4.1 [x] Implement the pybind11 module (`poker_engine`, `bindings/module.cpp`) exposing `Card`, `Deck`, `Player`, `Table`, `GameController`, and action/result types.
+4.2 [x] Expose the query methods the AI layer needs: legal actions, stacks, pot size, stage, dealer position.
+4.3 [x] Write a pytest suite against the bound module (`tests/test_bindings.py`: scripted hands, side pots, single-step mode, snapshot/ownership semantics, randomized play).
+4.4 [x] Document the bindings' Python-facing API in `specs/design.md`.
 
 ## Phase 5: Reinforcement Learning AI (Python)
 5.1 [x] Define the AI observation space and action space.
@@ -52,7 +52,7 @@ Blocked on Phase 6: error handling and clean restart at the integration layer, s
 8.1 [x] GoogleTest coverage for the engine (`engine/tests/`, 12 suites / 128 tests, covering Card/Deck/HandEvaluator/Player/Table/BettingRound/PotManager/Showdown/GameController).
 8.2 [x] Full game flow tests (all betting rounds, a complete hand) in C++ (`test_game_controller.cpp`, including a randomized many-hand chip-conservation test).
 8.3 [x] Pot splitting and side-pot case coverage in C++ (`test_pot_manager.cpp`, `test_betting_round.cpp`'s incomplete-raise cases).
-8.4 [ ] pytest coverage for the bindings (Phase 4.3) and the wired-up AI layer (Phase 5.7).
+8.4 [~] pytest coverage for the bindings (done, Phase 4.3) and the wired-up AI layer (Phase 5.7).
 8.5 [ ] Manual UX tests — blocked on Phase 6.
 8.6 [ ] Document how to build the engine, run its tests, build the bindings, and run AI training.
 
@@ -69,7 +69,7 @@ Blocked on Phase 6: error handling and clean restart at the integration layer, s
 3. [x] Task 3: Implement `HandEvaluator`.
 4. [x] Task 4: Implement `Player`, `Table`, `BettingRound`, `PotManager`, `Showdown`.
 5. [x] Task 5: Implement `GameController` and full-hand GoogleTest coverage.
-6. [ ] Task 6: Implement the pybind11 bindings module and its pytest suite.
+6. [x] Task 6: Implement the pybind11 bindings module and its pytest suite.
 7. [ ] Task 7: Wire the Python AI layer to the bound engine.
 8. [ ] Task 8: Choose and design the frontend.
 9. [ ] Task 9: Build the frontend against the engine/bindings/AI stack.

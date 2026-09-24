@@ -26,9 +26,32 @@ This is not quite MVC anymore: there is no single "Controller" shared across lan
 Each class lives as a `<name>.hpp` / `<name>.cpp` pair under `engine/include/poker/` and `engine/src/`, with a matching `engine/tests/test_<name>.cpp`.
 
 ### `bindings/` (pybind11)
-- One module (name TBD when built) that wraps every `engine/` class and enum needed by the AI layer: `Card`, `Deck`, `Player`, `Table`, `GameController`, the action/result types, and any query methods the observation encoder needs (legal actions, pot size, stacks, stage, etc.).
+- One module, `poker_engine` (`bindings/module.cpp`), wrapping the engine classes and enums the AI layer needs. (Implemented; tested by `tests/test_bindings.py`.)
 - No rules logic here — if something needs a rules decision, it belongs in `engine/`, not in a binding wrapper function.
-- Built only when `POKER_BUILD_PYTHON_BINDINGS=ON` is passed to CMake, so the engine and its GoogleTest suite build standalone without a Python dev environment.
+- Built only when `POKER_BUILD_PYTHON_BINDINGS=ON` is passed to CMake, so the engine and its GoogleTest suite build standalone without a Python dev environment. The module lands in `build/bindings/`, built against `.venv`'s Python by default; `tests/conftest.py` puts that directory on `sys.path`.
+
+#### Python API
+Naming follows Python conventions: snake_case members, UPPER_SNAKE enum values (`ActionType.ALL_IN`, `Street.PRE_FLOP`), and argument-free C++ getters become read-only properties. Engine exceptions map to `ValueError` (`std::invalid_argument`: illegal action, bad argument), `IndexError` (`std::out_of_range`: empty deck), and `RuntimeError` (`std::logic_error`: wrong phase, e.g. acting when no one is on the clock).
+
+| Python | Exposes |
+|---|---|
+| Enums | `Suit`, `Rank`, `HandType`, `ActionType`, `PlayerStatus`, `Street`, `ProgressionMode`, `HandPhase`; `street_number(street)` |
+| `Card(suit, rank)` | `suit`, `rank`, `rank_value`; `str()` gives e.g. `A♠`; hashable; `==` compares suit and rank, `<` compares rank only |
+| `Deck()` | `shuffle()`, `seed(n)`, `put_on_top(cards)`, `deal_card()`, `peek_card()`, `reset()`, `remaining`, `is_empty`, `len()`, `FULL_DECK_SIZE` |
+| `HandEvaluator` | static `evaluate_hand(5 cards)`, `best_hand_from_seven(7 cards)` → `Hand` (`hand_type`, `rank_value`, `kickers`, `cards`; comparable) |
+| `Action(action_type, player_seat, amount=0)` | BET amount = chips put in; RAISE amount = raise *by*, on top of the call; CALL/ALL_IN amounts ignored |
+| `Player(name, seat, initial_stack)` | `name`, `seat`, `stack`, `hole_cards`, `status`, `current_bet` (this hand), `is_active`, `can_act`, `has_chips` |
+| `Table(num_seats)` | Seating: `add_player`, `remove_player`, `get_player(seat)`, `get_all_players()`, `get_active_players()`. Position: `button_seat`, `small_blind_seat`, `big_blind_seat`, `is_button(seat)` etc., `get_next_active_player(seat)`, `current_player_seat`. State: `street`, `community_cards`, `burned_cards`, `total_pot`, blind amounts, `deck` (live, e.g. for seeding). `MAX_PLAYERS` |
+| `GameController(table, small_blind_amount, big_blind_amount, mode=AUTO)` | Hand flow: `start_hand(stacked_cards=[])`, `submit_action(action)`, `step_once()`, `advance()`, `mode` (settable). Queries: `phase`, `current_seat`, `legal_actions()` → `LegalActions`, `validate_action(action)` → reason or `None`, `betting_round` → `BettingRound` or `None`, `contributions` (`{seat: chips this hand}`), `pots` → `[Pot]`, `last_result` → `ShowdownResult` or `None`, `hand_number`, `is_hand_complete`, `table` (live) |
+| `LegalActions` | `seat`, `can_fold`, `can_check`, `can_call`/`call_amount`, `can_bet`/`min_bet`/`max_bet`, `can_raise`/`min_raise`/`max_raise` (raise-by), `can_all_in`/`all_in_amount` |
+| `BettingRound` | `highest_bet`, `min_raise_amount`, `player_bet_amounts` (this street), `actions`, `get_amount_to_call(seat)`, `can_check(seat)`, `is_capped(seat)`, `get_players_all_in()` |
+| `ShowdownResult` / `PlayerResult` / `Pot` | `player_results`, `winners`, `is_showdown`, `total_pot` / `seat`, `name`, `hole_cards`, `best_hand` (`None` on a fold-win), `chips_won` / `amount`, `eligible_seats` |
+
+Ownership rules, which keep Python from ever holding a dangling C++ pointer:
+- **Snapshots**: `Player`s read from a `Table` and `GameController.betting_round` are copies taken when read. A seat can be emptied and a street's betting round is replaced each street, so live references could dangle. Re-read them after the game moves on.
+- **Live references**: `GameController.table` and `Table.deck`, whose owners never replace them. Each keeps its owner alive.
+- **The controller copies its table**: `GameController(table, ...)` works on its own copy (the C++ constructor takes `Table` by value), so seat players on the original first, then use `controller.table`.
+- Table's per-hand mutators (dealing, blinds, advancing streets, pot updates) and `Player`'s chip/status mutators are not bound: only `GameController` drives a hand.
 
 ### `ai/` (Python, under `src/poker/ai/`)
 - `RLAgent`: encapsulates the policy network and training loop.
@@ -40,7 +63,7 @@ Each class lives as a `<name>.hpp` / `<name>.cpp` pair under `engine/include/pok
 - `OnlineTrainer`: runs policy updates between hands during live play.
 - `difficulty`: novice/advanced presets and checkpoint loading.
 
-These modules import `poker.engine.*` — the compiled `poker_engine` pybind11 module (`bindings/`) once it exists, exposing the same observation/action shapes the bound C++ objects provide. Wiring the AI layer to that module is tracked as its own phase in `tasks.md`, not assumed to be automatic.
+These modules still import the old Python engine (`poker.engine.*`), which no longer exists, so they don't import at the moment. Rewiring them onto the `poker_engine` module above is tracked as its own task in `tasks.md` (5.7), not assumed to be automatic.
 
 ### Frontend (deferred)
 Not designed yet. When it's picked up, it gets its own design pass against whatever the engine's and bindings' real, by-then-stable API looks like — not against this document's guesses.
@@ -113,7 +136,7 @@ Unchanged from the original design — this is Python-side and doesn't depend on
 
 ## Technology Stack
 - C++20 for the engine (`engine/`), built with CMake, tested with GoogleTest (via `find_package`, falling back to `FetchContent` if not installed locally).
-- pybind11 for the Python bindings (`bindings/`), fetched via CMake `FetchContent`, built only when `POKER_BUILD_PYTHON_BINDINGS=ON`.
+- pybind11 for the Python bindings (`bindings/`), via `find_package` if installed and `FetchContent` otherwise, built only when `POKER_BUILD_PYTHON_BINDINGS=ON`.
 - Python 3.11+ and PyTorch for the AI layer (`src/poker/ai/`), tested with pytest.
 - Frontend stack: undecided, out of scope for this revision.
 
